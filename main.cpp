@@ -61,8 +61,7 @@ private:
     VkInstance instance;
     VkDevice device;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-
-
+    VkQueue graphicsQueue;
 
     const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -427,6 +426,9 @@ private:
         }
 
     }
+
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
 
 
     void initVulkan()
