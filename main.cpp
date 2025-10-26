@@ -334,10 +334,13 @@ private:
         //azért adjuk meg optionalnak mert lehet ,hogy nincs is ilyen queue family a gpu-n (pl csak compute van) és az uint32 csak pozitív értékeket tud tárolni
         //ezért nemtudjuk ez lerendezn ia -1 értékkel
         std::optional<uint32_t> graphicsFamily; // Itt tároljuk a graphics queue family indexét
+        //annak a családnak az indexe amelyik támogatja a prezentációt (ablakra rajzolást)
+        std::optional<uint32_t> presentFamily;
 
-        bool isComplete()
-        {
-            return graphicsFamily.has_value();
+
+
+        bool isComplete() {
+            return graphicsFamily.has_value() && presentFamily.has_value();
         }
     };
 
@@ -370,6 +373,8 @@ private:
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
+
+
         //megmondom ,hogy melyik queue family a graphics queue
         int i = 0;
         for (const auto& queueFamily : queueFamilies)
@@ -384,6 +389,14 @@ private:
             }
 
             i++;
+        }
+
+        //ez a rész azt csinálja ,hogy megnézi hogy a kiválasztott queue family támogatja e a prezentációt
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+        //ha megvan akkor beállítja a struct ba
+        if (presentSupport) {
+            indices.presentFamily = i;
         }
 
 
@@ -445,6 +458,8 @@ private:
             throw std::runtime_error("failed to create window surface!");
         }
     }
+
+
 
 
 
