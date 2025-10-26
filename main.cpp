@@ -278,8 +278,7 @@ private:
     {
         QueueFamilyIndices indices = findQueueFamilies(device);
 
-        return indices.graphicsFamily.has_value();
-
+        return indices.isComplete();
     }
 
     void pickPhysicalDevice()
@@ -304,29 +303,38 @@ private:
         vector<VkPhysicalDevice> devices(deviceCount);
         vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
         //ha talál jó eszközt akkor beállítja azt
-        for (const auto& device : devices) {
-            if (isDeviceSuitable(device)) {
+        for (const auto& device : devices)
+        {
+            if (isDeviceSuitable(device))
+            {
                 physicalDevice = device;
                 break;
             }
         }
 
-        if (physicalDevice == VK_NULL_HANDLE) {
+        if (physicalDevice == VK_NULL_HANDLE)
+        {
             throw std::runtime_error("failed to find a suitable GPU!");
         }
-
     }
 
 
-
-    struct QueueFamilyIndices {
+    struct QueueFamilyIndices
+    {
         //jelenleg csak 1 változó de a struktúra hasznos lesz ha többet is hjozzá szeretnénk adni mert akkor egyszerűbb lesz visszaadni
         //azért adjuk meg optionalnak mert lehet ,hogy nincs is ilyen queue family a gpu-n (pl csak compute van) és az uint32 csak pozitív értékeket tud tárolni
         //ezért nemtudjuk ez lerendezn ia -1 értékkel
-            std::optional<uint32_t> graphicsFamily; // Itt tároljuk a graphics queue family indexét
+        std::optional<uint32_t> graphicsFamily; // Itt tároljuk a graphics queue family indexét
+
+        bool isComplete()
+        {
+            return graphicsFamily.has_value();
+        }
     };
+
     //kitöltjük a struktúrát hány családodt akarunk használni és visszaadjuk
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
+    {
         QueueFamilyIndices indices;
         // Ez a struct kerül majd visszaadásra, hogy a meghatározott queue family indexeket tartalmazza
 
@@ -355,11 +363,15 @@ private:
 
         //megmondom ,hogy melyik queue family a graphics queue
         int i = 0;
-        for (const auto& queueFamily : queueFamilies) {
+        for (const auto& queueFamily : queueFamilies)
+        {
             //itt a & az biwise műveletet jelenti (és művelet) ha a queueflags ben benne van a graphics bit akkor true lesz
             //a VK_QUEUE_GRAPHICS_BIT egy konstans
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 indices.graphicsFamily = i;
+            }
+            if (indices.isComplete()) {
+                break;
             }
 
             i++;
@@ -369,8 +381,6 @@ private:
         return indices;
         // Visszaadjuk a struct-ot, amiben a graphics queue family index van
     }
-
-
 
 
     void initVulkan()
