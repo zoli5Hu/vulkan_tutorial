@@ -274,7 +274,15 @@ private:
 
     bool isDeviceSuitable(VkPhysicalDevice device)
     {
-        return true;
+        //csak akkor kell ha meg akarjuk adni hogy melyik gpu-t használja a program vagy minimum feltételeket akarunk szabni
+        VkPhysicalDeviceProperties deviceProperties;
+        VkPhysicalDeviceFeatures deviceFeatures;
+        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+        vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+        // Akkor tér vissza true-val, ha: diszkrét GPU (VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+        // és támogatott a geometry shader (deviceFeatures.geometryShader).
+        return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+               deviceFeatures.geometryShader;
     }
 
     void pickPhysicalDevice()
