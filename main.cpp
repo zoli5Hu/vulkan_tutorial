@@ -8,6 +8,12 @@
 #include <optional>
 #include <vector>
 
+#define VK_USE_PLATFORM_WIN32_KHR
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 using namespace std;
@@ -62,6 +68,7 @@ private:
     VkDevice device;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkQueue graphicsQueue;
+    VkSurfaceKHR surface;
 
     const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -430,6 +437,15 @@ private:
 
     }
 
+    void createSurface() {
+        //lérehozza a surface t a glfw segítségével
+        //ez gyakorlatilag olyan mintha three.jsben a cnavast hoznám létre
+        //a &surfice már inicializálásnál megkapja a base adatokat és itt hozzá kell csak kötni
+        if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create window surface!");
+        }
+    }
+
 
 
 
@@ -468,6 +484,8 @@ private:
         {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
+        //felszabadítja a surface t
+        vkDestroySurfaceKHR(instance, surface, nullptr);
         //felszabadítja az instance t
         vkDestroyInstance(instance, nullptr);
         //memória felszabadítás és leállítás
@@ -477,6 +495,7 @@ private:
         glfwTerminate();
         //felszabadítja a logikai eszközt
         vkDestroyDevice(device, nullptr);
+
 
     }
 };
