@@ -59,6 +59,10 @@ public:
 private:
     GLFWwindow* window;
     VkInstance instance;
+    VkDevice device;
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+
+
 
     const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -283,7 +287,6 @@ private:
 
     void pickPhysicalDevice()
     {
-        VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
         uint32_t deviceCount = 0;
         // vkEnumeratePhysicalDevices paraméterei röviden:
         // - instance: annak a VkInstance-nek a névjegye, amelyhez tartozó fizikai eszközöket (GPU-kat) fel akarjuk sorolni.
@@ -383,11 +386,31 @@ private:
     }
 
 
+    void createLogicalDevice() {
+        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+        VkDeviceQueueCreateInfo queueCreateInfo{};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+        // A queueCount azt adja meg, hogy hány queue-t hozunk létre ebből a queue family-ből.
+        // Itt 1-et állítunk be, mert egyetlen grafikus queue bőven elég az alap rendereléshez.
+        // Ha párhuzamos (multi-threaded) renderelést vagy külön compute queue-kat akarnánk,
+        // akkor ezt az értéket lehetne 2-re vagy több-re növelni.
+        //itt a már kiválasztott családból mennyit akarunk használni
+        queueCreateInfo.queueCount = 1;
+
+        float queuePriority = 1.0f;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+    }
+
+
     void initVulkan()
     {
         createInstance();
         setupDebugMessenger();
         pickPhysicalDevice();
+        createLogicalDevice();
+
     }
 
     void initWindow()
