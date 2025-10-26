@@ -398,9 +398,34 @@ private:
         // akkor ezt az értéket lehetne 2-re vagy több-re növelni.
         //itt a már kiválasztott családból mennyit akarunk használni
         queueCreateInfo.queueCount = 1;
-
+        //1 a legmmagasabb
         float queuePriority = 1.0f;
         queueCreateInfo.pQueuePriorities = &queuePriority;
+
+        //jelenleg ürest theát minden érték VK_FALSEal inicializáljuk
+        VkPhysicalDeviceFeatures deviceFeatures{};
+        VkDeviceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        //megmondja melyik queue familyt akarjuk használni
+        createInfo.pQueueCreateInfos = &queueCreateInfo;
+        //hány queue familyt akarunk használni
+        createInfo.queueCreateInfoCount = 1;
+        //milyen eszköz funkciókat akarunk használni
+        createInfo.pEnabledFeatures = &deviceFeatures;
+
+        createInfo.enabledExtensionCount = 0;
+
+        if (enableValidationLayers) {
+            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            createInfo.ppEnabledLayerNames = validationLayers.data();
+        } else {
+            createInfo.enabledLayerCount = 0;
+        }
+
+        if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create logical device!");
+        }
+
     }
 
 
@@ -446,6 +471,9 @@ private:
         glfwDestroyWindow(window);
         //minden ami a könyvtárban van
         glfwTerminate();
+        //felszabadítja a logikai eszközt
+        vkDestroyDevice(device, nullptr);
+
     }
 };
 
