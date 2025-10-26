@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <vector>
 
 const uint32_t WIDTH = 800;
@@ -272,17 +273,13 @@ private:
         }
     }
 
+    //visszadja hogy van e kiválasztot queue family ami megfelel a gpu nak
     bool isDeviceSuitable(VkPhysicalDevice device)
     {
-        //csak akkor kell ha meg akarjuk adni hogy melyik gpu-t használja a program vagy minimum feltételeket akarunk szabni
-        VkPhysicalDeviceProperties deviceProperties;
-        VkPhysicalDeviceFeatures deviceFeatures;
-        vkGetPhysicalDeviceProperties(device, &deviceProperties);
-        vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-        // Akkor tér vissza true-val, ha: diszkrét GPU (VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-        // és támogatott a geometry shader (deviceFeatures.geometryShader).
-        return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-               deviceFeatures.geometryShader;
+        QueueFamilyIndices indices = findQueueFamilies(device);
+
+        return indices.graphicsFamily.has_value();
+
     }
 
     void pickPhysicalDevice()
@@ -319,6 +316,60 @@ private:
         }
 
     }
+
+
+
+    struct QueueFamilyIndices {
+        //jelenleg csak 1 változó de a struktúra hasznos lesz ha többet is hjozzá szeretnénk adni mert akkor egyszerűbb lesz visszaadni
+        //azért adjuk meg optionalnak mert lehet ,hogy nincs is ilyen queue family a gpu-n (pl csak compute van) és az uint32 csak pozitív értékeket tud tárolni
+        //ezért nemtudjuk ez lerendezn ia -1 értékkel
+            std::optional<uint32_t> graphicsFamily; // Itt tároljuk a graphics queue family indexét
+    };
+    //kitöltjük a struktúrát hány családodt akarunk használni és visszaadjuk
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+        QueueFamilyIndices indices;
+        // Ez a struct kerül majd visszaadásra, hogy a meghatározott queue family indexeket tartalmazza
+
+        // // optional-t használsz a logikai ellenőrzéshez, hogy van-e érték
+        // std::optional<uint32_t> graphicsFamily;
+        // //boolalpha szövegtént jeleniti meg a true/false-t
+        // std::cout << std::boolalpha << graphicsFamily.has_value() << std::endl;
+        // // false, mert még nincs érték hozzárendelve
+        // //ezt valós helyzetbe le kell kérni de általában 0||1 3080 gpunál jónak kell lennie
+        // graphicsFamily = 0;
+        // // Például az első queue family (index 0) megfelel a graphics queue-nak
+        //
+        // std::cout << std::boolalpha << graphicsFamily.has_value() << std::endl;
+        // // true, most már van érték
+        //
+        // // FONTOS: itt még **nem töltöd ki a QueueFamilyIndices struct-ot**, csak az optional-t használtad.
+        // // A Vulkan logikában így kellene:
+
+        // //ezt valós helyzetbe le kell kérni de általában 0||1 3080 gpunál jónak kell lennie
+        uint32_t queueFamilyCount = 0;
+        //lekérdezzük a queue familyk számát modosítja a queueFamilyCountot
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+        //a modosított queueFamilyCount alapján létrehozunk egy vektort amibe be fogjuk tölteni a queue familyket
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+        //megmondom ,hogy melyik queue family a graphics queue
+        int i = 0;
+        for (const auto& queueFamily : queueFamilies) {
+            //itt a & az biwise műveletet jelenti (és művelet) ha a queueflags ben benne van a graphics bit akkor true lesz
+            //a VK_QUEUE_GRAPHICS_BIT egy konstans
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                indices.graphicsFamily = i;
+            }
+
+            i++;
+        }
+
+
+        return indices;
+        // Visszaadjuk a struct-ot, amiben a graphics queue family index van
+    }
+
 
 
 
