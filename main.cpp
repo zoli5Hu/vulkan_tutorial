@@ -425,9 +425,11 @@ private:
             throw std::runtime_error("failed to create logical device!");
         }
 
+        vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+
+
     }
 
-    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
 
 
