@@ -290,7 +290,8 @@ private:
     // Röviden: ellenőrzi, hogy az adott fizikai eszköz (GPU) támogatja-e az általunk kért
     // eszköz-kiterjesztéseket (pl. swapchain). Ha minden szükséges kiterjesztés elérhető → true,
     // különben → false.
-    bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+    bool checkDeviceExtensionSupport(VkPhysicalDevice device)
+    {
         // 1) Lekérdezzük, hány eszköz-kiterjesztés érhető el ezen a fizikai eszközön
         uint32_t extensionCount;
         vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
@@ -304,7 +305,8 @@ private:
         set<string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
 
         // 4) Minden megtalált (elérhető) kiterjesztést kihúzunk a szükségesek közül
-        for (const auto& extension : availableExtensions) {
+        for (const auto& extension : availableExtensions)
+        {
             requiredExtensions.erase(extension.extensionName);
         }
 
@@ -323,7 +325,8 @@ private:
 
         // Swap chain megfelelőséget csak akkor ellenőrizzük, ha az extension elérhető
         bool swapChainAdequate = false;
-        if (extensionsSupported) {
+        if (extensionsSupported)
+        {
             // Lekérdezi a swap chain támogatási adatokat (capabilities, formats, presentModes)
             SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
             // Ellenőrzi, hogy van-e legalább 1 formátum ÉS 1 prezentációs mód
@@ -381,8 +384,8 @@ private:
         optional<uint32_t> presentFamily;
 
 
-
-        bool isComplete() {
+        bool isComplete()
+        {
             return graphicsFamily.has_value() && presentFamily.has_value();
         }
     };
@@ -417,30 +420,31 @@ private:
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
 
-
         //megmondom ,hogy melyik queue family a graphics queue
         int i = 0;
         for (const auto& queueFamily : queueFamilies)
         {
             //itt a & az biwise műveletet jelenti (és művelet) ha a queueflags ben benne van a graphics bit akkor true lesz
             //a VK_QUEUE_GRAPHICS_BIT egy konstans
-            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
                 indices.graphicsFamily = i;
             }
 
             VkBool32 presentSupport = false;
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
 
-            if (presentSupport) {
+            if (presentSupport)
+            {
                 indices.presentFamily = i;
             }
 
-            if (indices.isComplete()) {
+            if (indices.isComplete())
+            {
                 break;
             }
 
             i++;
-
         }
 
 
@@ -449,14 +453,16 @@ private:
     }
 
 
-    void createLogicalDevice() {
+    void createLogicalDevice()
+    {
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
         vector<VkDeviceQueueCreateInfo> queueCreateInfos;
         set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
 
         float queuePriority = 1.0f;
-        for (uint32_t queueFamily : uniqueQueueFamilies) {
+        for (uint32_t queueFamily : uniqueQueueFamilies)
+        {
             VkDeviceQueueCreateInfo queueCreateInfo{};
             queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             queueCreateInfo.queueFamilyIndex = queueFamily;
@@ -480,36 +486,40 @@ private:
         createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
         createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-        if (enableValidationLayers) {
+        if (enableValidationLayers)
+        {
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             createInfo.ppEnabledLayerNames = validationLayers.data();
-        } else {
+        }
+        else
+        {
             createInfo.enabledLayerCount = 0;
         }
 
-        if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
+        if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
+        {
             throw runtime_error("failed to create logical device!");
         }
 
         vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
         vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
-
-
-
     }
 
-    void createSurface() {
+    void createSurface()
+    {
         //lérehozza a surface t a glfw segítségével
         //ez gyakorlatilag olyan mintha three.jsben a cnavast hoznám létre
         //a &surfice már inicializálásnál megkapja a base adatokat és itt hozzá kell csak kötni
-        if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+        if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS)
+        {
             throw runtime_error("failed to create window surface!");
         }
     }
 
 
     // Swap chain támogatási adatokat tároló struktúra
-    struct SwapChainSupportDetails {
+    struct SwapChainSupportDetails
+    {
         // Alap képességek: kép méretek, transzformációk, stb.
         VkSurfaceCapabilitiesKHR capabilities;
         // Támogatott formátumok: színformátum és színtér kombinációk
@@ -519,7 +529,8 @@ private:
     };
 
     // Lekérdezi a fizikai eszköz swap chain támogatási adatait
-    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
+    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device)
+    {
         SwapChainSupportDetails details;
 
         // Lekéri a fizikai eszköz és a felület közötti swap chain képességeket (méret, képkockák száma stb.)
@@ -529,7 +540,8 @@ private:
         // Lekérdezi, hányféle színformátumot támogat a felület (csak a számot)
         vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
 
-        if (formatCount != 0) {
+        if (formatCount != 0)
+        {
             // Lefoglalja a formátumokat tároló vektort a megfelelő méretre
             details.formats.resize(formatCount);
 
@@ -541,7 +553,8 @@ private:
         // Lekérdezi, hányféle prezentációs módot (present mode) támogat a felület
         vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
 
-        if (presentModeCount != 0) {
+        if (presentModeCount != 0)
+        {
             // Lefoglalja a prezentációs módokat tároló vektort
             details.presentModes.resize(presentModeCount);
 
@@ -550,14 +563,25 @@ private:
         }
 
 
-
         // Visszaadja az összegyűjtött információkat (képességek + formátumok)
         return details;
     }
 
-
-
-
+    // Kiválasztja a legjobb swap surface formátumot az elérhető formátumok közül
+    // Preferált: B8G8R8A8_SRGB színformátum + SRGB_NONLINEAR színtér, egyébként az első elérhető
+    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+    {
+        for (const auto& availableFormat : availableFormats)
+        {
+            // Ha megtaláljuk a preferált SRGB formátumot és színteret, azt választjuk
+            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            {
+                return availableFormat;
+            }
+        }
+        // Ha nincs preferált formátum, az első elérhető formátumot használjuk
+        return availableFormats[0];
+    }
 
 
     void initVulkan()
@@ -567,7 +591,6 @@ private:
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
-
     }
 
     void initWindow()
@@ -609,9 +632,6 @@ private:
         glfwDestroyWindow(window);
         //minden ami a könyvtárban van
         glfwTerminate();
-
-
-
     }
 };
 
