@@ -12,6 +12,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
+#include <set>
 #include <GLFW/glfw3native.h>
 
 const uint32_t WIDTH = 800;
@@ -69,8 +70,11 @@ private:
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkQueue graphicsQueue;
     VkSurfaceKHR surface;
+    VkQueue presentQueue;
+    //swapchan setup start extension enable
+    const vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-    const std::vector<const char*> validationLayers = {
+    const vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
     };
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -85,7 +89,7 @@ private:
         uint32_t layerCount;
         vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
-        std::vector<VkLayerProperties> availableLayers(layerCount);
+        vector<VkLayerProperties> availableLayers(layerCount);
         vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
         for (const char* layerName : validationLayers)
@@ -150,7 +154,7 @@ private:
         //saját struktúrt is lehet vele csinálni
         void* pUserData)
     {
-        std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+        cerr << "validation layer: " << pCallbackData->pMessage << endl;
         //VkBool32 visszatérési értéke
         return VK_FALSE;
     }
@@ -178,7 +182,7 @@ private:
 
         if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS)
         {
-            throw std::runtime_error("failed to set up debug messenger!");
+            throw runtime_error("failed to set up debug messenger!");
         }
     }
 
@@ -187,7 +191,7 @@ private:
         //ellenőrzi hogy a layerek elérhetőek e
         if (enableValidationLayers && !checkValidationLayerSupport())
         {
-            throw std::runtime_error("validation layers requested, but not available!");
+            throw runtime_error("validation layers requested, but not available!");
         }
         //a {} a struktúra teljes kinullázásához kell
         VkApplicationInfo appInfo{};
@@ -236,7 +240,7 @@ private:
         //ha nem sikerül az instance létrehozása akkor err
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
         {
-            throw std::runtime_error("failed to create instance!");
+            throw runtime_error("failed to create instance!");
         }
 
         //létrehozok egy új extensiont csak a vknak itt már nem a glfwnek
@@ -279,16 +283,55 @@ private:
 
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
         {
-            throw std::runtime_error("failed to create instance!");
+            throw runtime_error("failed to create instance!");
         }
     }
 
-    //visszadja hogy van e kiválasztot queue family ami megfelel a gpu nak
+    // Röviden: ellenőrzi, hogy az adott fizikai eszköz (GPU) támogatja-e az általunk kért
+    // eszköz-kiterjesztéseket (pl. swapchain). Ha minden szükséges kiterjesztés elérhető → true,
+    // különben → false.
+    bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+        // 1) Lekérdezzük, hány eszköz-kiterjesztés érhető el ezen a fizikai eszközön
+        uint32_t extensionCount;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+        // 2) Lefoglaljuk a listát és betöltjük az elérhető kiterjesztések adatait
+        vector<VkExtensionProperties> availableExtensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+        // 3) A korábban meghatározott (szükséges) kiterjesztéseket halmazba tesszük
+        //    Példa: VK_KHR_swapchain
+        set<string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+        // 4) Minden megtalált (elérhető) kiterjesztést kihúzunk a szükségesek közül
+        for (const auto& extension : availableExtensions) {
+            requiredExtensions.erase(extension.extensionName);
+        }
+
+        // 5) Ha nem maradt elvárt kiterjesztés a halmazban, akkor minden támogatott
+        return requiredExtensions.empty();
+    }
+
+
+    // Ellenőrzi, hogy egy fizikai eszköz (GPU) alkalmas-e: queue family-k, extension-ök és swap chain támogatottságát vizsgálja
     bool isDeviceSuitable(VkPhysicalDevice device)
     {
+        // Lekérdezi a graphics és present queue family indexeket
         QueueFamilyIndices indices = findQueueFamilies(device);
+        // Ellenőrzi, hogy a GPU támogatja-e a szükséges extension-öket (pl. VK_KHR_swapchain)
+        bool extensionsSupported = checkDeviceExtensionSupport(device);
 
-        return indices.isComplete();
+        // Swap chain megfelelőséget csak akkor ellenőrizzük, ha az extension elérhető
+        bool swapChainAdequate = false;
+        if (extensionsSupported) {
+            // Lekérdezi a swap chain támogatási adatokat (capabilities, formats, presentModes)
+            SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+            // Ellenőrzi, hogy van-e legalább 1 formátum ÉS 1 prezentációs mód
+            swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+        }
+
+        // GPU csak akkor alkalmas, ha minden kritérium teljesül
+        return indices.isComplete() && extensionsSupported && swapChainAdequate;
     }
 
     void pickPhysicalDevice()
@@ -323,7 +366,7 @@ private:
 
         if (physicalDevice == VK_NULL_HANDLE)
         {
-            throw std::runtime_error("failed to find a suitable GPU!");
+            throw runtime_error("failed to find a suitable GPU!");
         }
     }
 
@@ -333,9 +376,9 @@ private:
         //jelenleg csak 1 változó de a struktúra hasznos lesz ha többet is hjozzá szeretnénk adni mert akkor egyszerűbb lesz visszaadni
         //azért adjuk meg optionalnak mert lehet ,hogy nincs is ilyen queue family a gpu-n (pl csak compute van) és az uint32 csak pozitív értékeket tud tárolni
         //ezért nemtudjuk ez lerendezn ia -1 értékkel
-        std::optional<uint32_t> graphicsFamily; // Itt tároljuk a graphics queue family indexét
+        optional<uint32_t> graphicsFamily; // Itt tároljuk a graphics queue family indexét
         //annak a családnak az indexe amelyik támogatja a prezentációt (ablakra rajzolást)
-        std::optional<uint32_t> presentFamily;
+        optional<uint32_t> presentFamily;
 
 
 
@@ -351,15 +394,15 @@ private:
         // Ez a struct kerül majd visszaadásra, hogy a meghatározott queue family indexeket tartalmazza
 
         // // optional-t használsz a logikai ellenőrzéshez, hogy van-e érték
-        // std::optional<uint32_t> graphicsFamily;
+        // optional<uint32_t> graphicsFamily;
         // //boolalpha szövegtént jeleniti meg a true/false-t
-        // std::cout << std::boolalpha << graphicsFamily.has_value() << std::endl;
+        // cout << boolalpha << graphicsFamily.has_value() << endl;
         // // false, mert még nincs érték hozzárendelve
         // //ezt valós helyzetbe le kell kérni de általában 0||1 3080 gpunál jónak kell lennie
         // graphicsFamily = 0;
         // // Például az első queue family (index 0) megfelel a graphics queue-nak
         //
-        // std::cout << std::boolalpha << graphicsFamily.has_value() << std::endl;
+        // cout << boolalpha << graphicsFamily.has_value() << endl;
         // // true, most már van érték
         //
         // // FONTOS: itt még **nem töltöd ki a QueueFamilyIndices struct-ot**, csak az optional-t használtad.
@@ -370,7 +413,7 @@ private:
         //lekérdezzük a queue familyk számát modosítja a queueFamilyCountot
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
         //a modosított queueFamilyCount alapján létrehozunk egy vektort amibe be fogjuk tölteni a queue familyket
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
 
@@ -384,19 +427,20 @@ private:
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 indices.graphicsFamily = i;
             }
+
+            VkBool32 presentSupport = false;
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+            if (presentSupport) {
+                indices.presentFamily = i;
+            }
+
             if (indices.isComplete()) {
                 break;
             }
 
             i++;
-        }
 
-        //ez a rész azt csinálja ,hogy megnézi hogy a kiválasztott queue family támogatja e a prezentációt
-        VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-        //ha megvan akkor beállítja a struct ba
-        if (presentSupport) {
-            indices.presentFamily = i;
         }
 
 
@@ -408,31 +452,33 @@ private:
     void createLogicalDevice() {
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
-        VkDeviceQueueCreateInfo queueCreateInfo{};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-        // A queueCount azt adja meg, hogy hány queue-t hozunk létre ebből a queue family-ből.
-        // Itt 1-et állítunk be, mert egyetlen grafikus queue bőven elég az alap rendereléshez.
-        // Ha párhuzamos (multi-threaded) renderelést vagy külön compute queue-kat akarnánk,
-        // akkor ezt az értéket lehetne 2-re vagy több-re növelni.
-        //itt a már kiválasztott családból mennyit akarunk használni
-        queueCreateInfo.queueCount = 1;
-        //1 a legmmagasabb
+        vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+        set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+
         float queuePriority = 1.0f;
-        queueCreateInfo.pQueuePriorities = &queuePriority;
+        for (uint32_t queueFamily : uniqueQueueFamilies) {
+            VkDeviceQueueCreateInfo queueCreateInfo{};
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = queueFamily;
+            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+            queueCreateInfos.push_back(queueCreateInfo);
+        }
 
         //jelenleg ürest theát minden érték VK_FALSEal inicializáljuk
         VkPhysicalDeviceFeatures deviceFeatures{};
         VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         //megmondja melyik queue familyt akarjuk használni
-        createInfo.pQueueCreateInfos = &queueCreateInfo;
         //hány queue familyt akarunk használni
-        createInfo.queueCreateInfoCount = 1;
+        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+        createInfo.pQueueCreateInfos = queueCreateInfos.data();
+
         //milyen eszköz funkciókat akarunk használni
         createInfo.pEnabledFeatures = &deviceFeatures;
 
-        createInfo.enabledExtensionCount = 0;
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+        createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
         if (enableValidationLayers) {
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -442,10 +488,12 @@ private:
         }
 
         if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create logical device!");
+            throw runtime_error("failed to create logical device!");
         }
 
         vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+        vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+
 
 
     }
@@ -455,8 +503,56 @@ private:
         //ez gyakorlatilag olyan mintha three.jsben a cnavast hoznám létre
         //a &surfice már inicializálásnál megkapja a base adatokat és itt hozzá kell csak kötni
         if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create window surface!");
+            throw runtime_error("failed to create window surface!");
         }
+    }
+
+
+    // Swap chain támogatási adatokat tároló struktúra
+    struct SwapChainSupportDetails {
+        // Alap képességek: kép méretek, transzformációk, stb.
+        VkSurfaceCapabilitiesKHR capabilities;
+        // Támogatott formátumok: színformátum és színtér kombinációk
+        std::vector<VkSurfaceFormatKHR> formats;
+        // Elérhető megjelenítési módok: VSync, triple buffering, stb.
+        std::vector<VkPresentModeKHR> presentModes;
+    };
+
+    // Lekérdezi a fizikai eszköz swap chain támogatási adatait
+    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
+        SwapChainSupportDetails details;
+
+        // Lekéri a fizikai eszköz és a felület közötti swap chain képességeket (méret, képkockák száma stb.)
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+        uint32_t formatCount;
+        // Lekérdezi, hányféle színformátumot támogat a felület (csak a számot)
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+
+        if (formatCount != 0) {
+            // Lefoglalja a formátumokat tároló vektort a megfelelő méretre
+            details.formats.resize(formatCount);
+
+            // Lekéri a konkrét színformátumokat és betölti őket a vektorba
+            vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
+        }
+
+        uint32_t presentModeCount;
+        // Lekérdezi, hányféle prezentációs módot (present mode) támogat a felület
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+
+        if (presentModeCount != 0) {
+            // Lefoglalja a prezentációs módokat tároló vektort
+            details.presentModes.resize(presentModeCount);
+
+            // Lekéri a konkrét prezentációs módokat (pl. FIFO, MAILBOX stb.)
+            vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
+        }
+
+
+
+        // Visszaadja az összegyűjtött információkat (képességek + formátumok)
+        return details;
     }
 
 
@@ -468,6 +564,7 @@ private:
     {
         createInstance();
         setupDebugMessenger();
+        createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
 
@@ -495,12 +592,16 @@ private:
 
     void cleanup()
     {
+        //felszabadítja a logikai eszközt
+        vkDestroyDevice(device, nullptr);
+        //felszabadítja a surface t
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+
         if (enableValidationLayers)
         {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
-        //felszabadítja a surface t
-        vkDestroySurfaceKHR(instance, surface, nullptr);
+
         //felszabadítja az instance t
         vkDestroyInstance(instance, nullptr);
         //memória felszabadítás és leállítás
@@ -508,8 +609,7 @@ private:
         glfwDestroyWindow(window);
         //minden ami a könyvtárban van
         glfwTerminate();
-        //felszabadítja a logikai eszközt
-        vkDestroyDevice(device, nullptr);
+
 
 
     }
@@ -523,9 +623,9 @@ int main()
     {
         app.run();
     }
-    catch (const std::exception& e)
+    catch (const exception& e)
     {
-        std::cerr << e.what() << std::endl;
+        cerr << e.what() << endl;
         return EXIT_FAILURE;
     }
 
