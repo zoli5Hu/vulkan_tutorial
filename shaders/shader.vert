@@ -1,5 +1,8 @@
 #version 450
 
+
+layout(location = 0) out vec3 fragColor;
+
 //háromszög pontjainak elhelyezkedése
 vec2 positions[3] = vec2[](
 vec2(0.0, -0.5),
@@ -22,6 +25,5 @@ void main() {
     //a gl_Position a beépített kimeneti változó amely a vertex pozícióját határozza meg
     gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
     //beállítjuk a színt a háromszög pontjai alapján
-    //fragColor a kimeneti változó amely a fragment shader felé továbbítja a szín információt
     fragColor = colors[gl_VertexIndex];
 }

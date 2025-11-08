@@ -13,6 +13,7 @@
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <algorithm>
+#include <fstream>
 #include <limits>
 #include <set>
 #include <GLFW/glfw3native.h>
@@ -688,8 +689,35 @@ private:
 
     }
 
-    void createGraphicsPipeline() {
 
+    // Fájlt olvas be bájtokként és visszaadja egy vector<char>-ben
+    static vector<char> readFile(const string& filename) {
+        // Megnyitjuk a fájlt bináris módban, és a fájl végére állítjuk a read pointert
+        //ios::ate végéről olvas be ez a tellg miatt csináljuk könnyeb ba mretét megadni
+        //ios::binary binárisként kezeli a filet nincsbenne /n
+        ifstream file(filename, ios::ate | ios::binary);
+        // Ha nem sikerült megnyitni, dobunk egy kivételt
+        if (!file.is_open()) {
+            throw runtime_error("failed to open file!");
+        }
+        // Lekérdezzük a fájl méretét a tellg() függvénnyel
+        size_t fileSize = (size_t) file.tellg();
+        // Létrehozunk egy vector<char>-t, ami a fájl bájtjait fogja tárolni
+        vector<char> buffer(fileSize);
+        // Visszaállítjuk a read pointert a fájl elejére
+        file.seekg(0);
+        // Beolvassuk a fájl tartalmát a buffer-be
+        file.read(buffer.data(), fileSize);
+        // Bezárjuk a fájlt
+        file.close();
+        // Visszaadjuk a beolvasott bájtokat
+        return buffer;
+    }
+
+
+    void createGraphicsPipeline() {
+        auto vertShaderCode = readFile("shaders/vert.spv");
+        auto fragShaderCode = readFile("shaders/frag.spv");
     }
 
     // Létrehozza a swap chain-t, amely a képernyőre kerülő képek puffereit kezeli
