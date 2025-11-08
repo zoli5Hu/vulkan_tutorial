@@ -659,6 +659,7 @@ private:
         createLogicalDevice();
         createSwapChain();
         createImageViews();
+        createGraphicsPipeline();
     }
 
 
@@ -684,6 +685,10 @@ private:
                 throw runtime_error("failed to create image views!");
             }
         }
+
+    }
+
+    void createGraphicsPipeline() {
 
     }
 
