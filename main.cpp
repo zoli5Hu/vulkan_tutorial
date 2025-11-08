@@ -73,6 +73,8 @@ private:
     VkQueue graphicsQueue;
     VkSurfaceKHR surface;
     VkQueue presentQueue;
+    VkSwapchainKHR swapChain;
+
     //swapchan setup start extension enable
     const vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
@@ -133,6 +135,7 @@ private:
         return extensions;
     }
 
+    /*
     //ezek a platformfüggetlenség miatt kellenek
     //vkbool vulakn féle boolian igazából 32 bites integer ez mindig 4 byte zeért platformfüggetlen mert alapból cben nicns boolean
     //VKAPI_ATTR egy makró ami általában üres de bizonyos platformok adatokat tesznek bele ls bizonyos fügvényeket megtud hívni a könyvtárból
@@ -146,6 +149,7 @@ private:
     //
     // 🔹 Calling convention (hívási konvenció):
     // Előírja, hogyan történik a függvényhívás technikailag — pl. a paraméterek átadása, veremhasználat, visszatérési érték kezelése (__cdecl, __stdcall, __fastcall, stb.).
+    */
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
         //mennyire súlyos
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -454,7 +458,6 @@ private:
         // Visszaadjuk a struct-ot, amiben a graphics queue family index van
     }
 
-
     void createLogicalDevice()
     {
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
@@ -518,7 +521,6 @@ private:
         }
     }
 
-
     // Swap chain támogatási adatokat tároló struktúra
     struct SwapChainSupportDetails
     {
@@ -571,12 +573,13 @@ private:
 
     // Kiválasztja a legjobb swap surface formátumot az elérhető formátumok közül
     // Preferált: B8G8R8A8_SRGB színformátum + SRGB_NONLINEAR színtér, egyébként az első elérhető
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const vector<VkSurfaceFormatKHR>& availableFormats)
     {
         for (const auto& availableFormat : availableFormats)
         {
             // Ha megtaláljuk a preferált SRGB formátumot és színteret, azt választjuk
-            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace ==
+                VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             {
                 return availableFormat;
             }
@@ -585,10 +588,13 @@ private:
         return availableFormats[0];
     }
 
-    VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes) {
-        for (const auto& availablePresentMode : availablePresentModes) {
+    VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes)
+    {
+        for (const auto& availablePresentMode : availablePresentModes)
+        {
             //kikeressük a mailbox presaentation modot
-            if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+            {
                 return availablePresentMode;
             }
         }
@@ -597,15 +603,19 @@ private:
     }
 
     // Meghatározza a swap chain képek felbontását (szélesség és magasság pixelben)
-    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+    {
         // Ha a currentExtent.width != UINT32_MAX, akkor a window manager már meghatározta
         // az ideális felbontást, amit kötelezően használnunk kell
         //a numeric:limits az adott típus maximum értékeét adja vissza
         //általában a fejlesztők pl windowsnál megadják fix értéknek a maxopt hogy tudjam nem kell beállítani
         //dep l mobilnál nem adják meg és ott muszáj
-        if (capabilities.currentExtent.width != numeric_limits<uint32_t>::max()) {
+        if (capabilities.currentExtent.width != numeric_limits<uint32_t>::max())
+        {
             return capabilities.currentExtent;
-        } else {
+        }
+        else
+        {
             // Ha a width == UINT32_MAX, akkor mi magunk választhatjuk meg a felbontást
             // az ablak tényleges mérete alapján
             int width, height;
@@ -621,16 +631,16 @@ private:
 
             // Biztosítjuk, hogy a választott szélesség a megengedett tartományban legyen
             // (nem lehet kisebb a minimum-nál, nem lehet nagyobb a maximum-nál)
-            actualExtent.width = clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+            actualExtent.width = clamp(actualExtent.width, capabilities.minImageExtent.width,
+                                       capabilities.maxImageExtent.width);
             // Ugyanez a magasságra is
-            actualExtent.height = clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+            actualExtent.height = clamp(actualExtent.height, capabilities.minImageExtent.height,
+                                        capabilities.maxImageExtent.height);
 
             // Visszaadjuk a korrigált, érvényes felbontást
             return actualExtent;
         }
     }
-
-
 
     void initVulkan()
     {
@@ -639,6 +649,107 @@ private:
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
+        createSwapChain();
+    }
+
+    // Létrehozza a swap chain-t, amely a képernyőre kerülő képek puffereit kezeli
+    void createSwapChain()
+    {
+        /*
+        // Lekérdezi a fizikai eszköz swap chain támogatási adatait
+        // (capabilities: képességek, formats: színformátumok, presentModes: megjelenítési módok)
+        */
+        SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
+        /*
+        // Kiválasztja a legjobb színformátumot a támogatott formátumok közül
+        // (preferált: B8G8R8A8_SRGB + SRGB_NONLINEAR színtér)
+        */
+        VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+        /*
+        // Kiválasztja a prezentációs módot (VSync beállítás)
+        // (preferált: MAILBOX = triple buffering, fallback: FIFO = VSync)
+        */
+        VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+        /*
+        // Meghatározza a swap chain képek felbontását (szélesség és magasság pixelben)
+        // Az ablak tényleges méretéhez igazítva, a GPU korlátai között
+        */
+        VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+        //ez jó mert nem fog vilkdzni ak ép double buffering általába + 1 kép = 3 kép
+        uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+
+        /*// Itt a swapChainSupport.capabilities.maxImageCount > 0 feltétel NEM azt jelenti, hogy 0 darab képet lehet.
+        // A 0 azt jelzi, hogy NINCS felső korlát – vagyis bármennyi képet létrehozhatunk.
+        // Ezért itt azt mondjuk:
+        // ha VAN felső korlát (maxImageCount > 0) és a mi általunk kért képszám TÚLLÉPNÉ azt,
+        // akkor állítsuk vissza a maximumra.*/
+        if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
+        {
+            imageCount = swapChainSupport.capabilities.maxImageCount;
+        }
+
+        // 🔹 Swapchain létrehozásához szükséges információkat feltöltjük
+        VkSwapchainCreateInfoKHR createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR; // Struktúratípus beállítása
+        createInfo.surface = surface; // A felület, amire rajzolunk
+        createInfo.minImageCount = imageCount; // Képek száma a láncban
+        createInfo.imageFormat = surfaceFormat.format; // Kép színformátuma
+        createInfo.imageColorSpace = surfaceFormat.colorSpace; // Színtér (pl. SRGB)
+        createInfo.imageExtent = extent; // Felbontás (szélesség, magasság)
+        createInfo.imageArrayLayers = 1; // 1 = normál 2D kép (nem VR)
+        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // A képeket színes rendercélként használjuk
+
+        /*
+        // 🔹 Lekérdezzük a GPU queue family indexeit
+        // A QueueFamilyIndices egy struktúra, ami tartalmazhat opcionális graphicsFamily és presentFamily indexeket
+        */
+        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+        /*// 🔹 Két indexet készítünk: graphics és presentation queue családok
+        // Ezek azok a sorok a GPU-n, amiken majd rajzolni és képernyőre küldeni fogunk*/
+        uint32_t queueFamilyIndices[] = {
+            indices.graphicsFamily.value(),
+            indices.presentFamily.value()
+        };
+
+        // 🔹 Ellenőrizzük, hogy a grafikai és a prezentációs queue ugyanaz-e
+        if (indices.graphicsFamily != indices.presentFamily)
+        {
+            /*
+            / 🔹 Különböző queue family-k használata esetén:
+            // VK_SHARING_MODE_CONCURRENT: a képeket egyszerre több queue family is használhatja
+            // explicit ownership átvitel nélkül. Ez kényelmes, ha két queue-t használunk.
+            */
+            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            createInfo.queueFamilyIndexCount = 2; // Hány queue family használja a képeket
+            createInfo.pQueueFamilyIndices = queueFamilyIndices; // Melyik queue family-k között osztozik
+        }
+        else
+        {
+            /*
+            // 🔹 Ha a grafikai és prezentációs queue ugyanaz:
+            // VK_SHARING_MODE_EXCLUSIVE: az egyik queue “birtokolja” a képet,
+            // nincs szükség explicit ownership átadásra, jobb teljesítmény.
+            */
+            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            createInfo.queueFamilyIndexCount = 0; // opcionális, mert csak egy queue van
+            createInfo.pQueueFamilyIndices = nullptr; // opcionális, nincs több queue
+        }
+
+        /*// Ha akarunk transzformációt alkalmazni (pl. 90 fokos forgatás), itt állíthatjuk be
+        // Most az aktuális/alapértelmezett transzformációt használjuk (nincs forgatás)*/
+        createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+        /*// Beállítja, hogyan keverődjön az ablak alfa csatornája más ablakokkal
+        // OPAQUE_BIT: teljesen átlátszatlan, figyelmen kívül hagyja az alfa értékeket*/
+        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        createInfo.presentMode = presentMode; // Prezentációs mód beállítása (pl. FIFO, MAILBOX - VSync típusok)
+        createInfo.clipped = VK_TRUE;
+        // Ha más ablak takarja a képet, azokat a pixeleket nem rendereli (teljesítmény optimalizáció)
+        createInfo.oldSwapchain = VK_NULL_HANDLE; // optimalizálási dolgok rasztrizálásnál
+
+        if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS)
+        {
+            throw runtime_error("failed to create swap chain!");
+        }
     }
 
     void initWindow()
@@ -663,6 +774,8 @@ private:
 
     void cleanup()
     {
+        //felszabadítja a swapchaint
+        vkDestroySwapchainKHR(device, swapChain, nullptr);
         //felszabadítja a logikai eszközt
         vkDestroyDevice(device, nullptr);
         //felszabadítja a surface t
