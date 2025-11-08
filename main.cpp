@@ -73,7 +73,12 @@ private:
     VkQueue graphicsQueue;
     VkSurfaceKHR surface;
     VkQueue presentQueue;
+    VkDebugUtilsMessengerEXT debugMessenger;
+
     VkSwapchainKHR swapChain;
+    vector<VkImage> swapChainImages;
+    VkFormat swapChainImageFormat;
+    VkExtent2D swapChainExtent;
 
     //swapchan setup start extension enable
     const vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
@@ -81,7 +86,8 @@ private:
     const vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
     };
-    VkDebugUtilsMessengerEXT debugMessenger;
+
+
 
 #ifdef NDEBUG
     const bool enableValidationLayers = false;
@@ -750,7 +756,14 @@ private:
         {
             throw runtime_error("failed to create swap chain!");
         }
-    }
+
+        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr); // Lekérdezi a swap chain-ben lévő képek számát
+        swapChainImages.resize(imageCount); // Átméretezi a vektort a képek számára
+        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data()); // Betölti a swap chain képeket a vektorba
+
+        swapChainImageFormat = surfaceFormat.format; // Elmenti a választott színformátumot későbbi használatra
+        swapChainExtent = extent; // Elmenti a swap chain felbontását későbbi használatra
+        }
 
     void initWindow()
     {
