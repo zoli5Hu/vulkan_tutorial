@@ -87,6 +87,8 @@ private:
         "VK_LAYER_KHRONOS_validation"
     };
 
+    vector<VkImageView> swapChainImageViews;
+
 
 
 #ifdef NDEBUG
@@ -656,6 +658,33 @@ private:
         pickPhysicalDevice();
         createLogicalDevice();
         createSwapChain();
+        createImageViews();
+    }
+
+
+    void createImageViews() {
+        swapChainImageViews.resize(swapChainImages.size()); // Átméretezi a vektor tárolót, hogy minden swap chain képhez tartozzon egy image view
+        for (size_t i = 0; i < swapChainImages.size(); i++) { // Végigiterál minden swap chain képen
+            VkImageViewCreateInfo createInfo{}; // Létrehozza az image view konfigurációs struktúrát
+            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; // Beállítja a struktúra típusát
+            createInfo.image = swapChainImages[i]; // Megadja, melyik képhez tartozik ez az image view
+            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; // 2D textúraként kezeli a képet (nem 1D, 3D vagy cube map)
+            createInfo.format = swapChainImageFormat; // Beállítja a kép színformátumát (pl. B8G8R8A8_SRGB)
+            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY; // Piros csatorna marad eredeti (nem cserélődik)
+            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY; // Zöld csatorna marad eredeti
+            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY; // Kék csatorna marad eredeti
+            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY; // Alfa csatorna marad eredeti
+            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Megadja, hogy színes képként kezeljük (nem depth/stencil)
+            createInfo.subresourceRange.baseMipLevel = 0; // A legmagasabb felbontású mipmap szintet használjuk (0 = teljes felbontás)
+            createInfo.subresourceRange.levelCount = 1; // Csak 1 mipmap szintet használunk (nincs mipmap lánc)
+            createInfo.subresourceRange.baseArrayLayer = 0; // Az első tömb rétegtől kezdjük (VR/stereo renderingnél van jelentősége)
+            createInfo.subresourceRange.layerCount = 1; // Csak 1 réteget használunk (nem VR, csak sima 2D kép)
+
+            if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
+                throw runtime_error("failed to create image views!");
+            }
+        }
+
     }
 
     // Létrehozza a swap chain-t, amely a képernyőre kerülő képek puffereit kezeli
@@ -787,6 +816,10 @@ private:
 
     void cleanup()
     {
+        //felszabadítja az imagevieweket
+        for (auto imageView : swapChainImageViews) {
+            vkDestroyImageView(device, imageView, nullptr);
+        }
         //felszabadítja a swapchaint
         vkDestroySwapchainKHR(device, swapChain, nullptr);
         //felszabadítja a logikai eszközt
