@@ -6,10 +6,13 @@ layout(location = 0) out vec4 outColor;
 // 🔹 vec4 → 4 komponensű vektor (R, G, B, A)
 // 🔹 outColor → változó neve, amit a main() belsejében állítunk be
 
+layout(location = 0) out vec3 fragColor;
+
+
 // 🔹 Ez fut minden fragmentre (pixelre) a rasterizált primitívből
 void main() {
 
-    outColor = vec4(1.0, 0.0, 0.0, 1.0);
+    outColor = vec4(fragColor, 1.0);
     // 🔹 Beállítja a pixel színét
     // 🔹 vec4(R, G, B, A)
     // 🔹 R = 1.0 → maximális piros
