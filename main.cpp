@@ -12,6 +12,8 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
+#include <algorithm>
+#include <limits>
 #include <set>
 #include <GLFW/glfw3native.h>
 
@@ -582,6 +584,52 @@ private:
         // Ha nincs preferált formátum, az első elérhető formátumot használjuk
         return availableFormats[0];
     }
+
+    VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes) {
+        for (const auto& availablePresentMode : availablePresentModes) {
+            //kikeressük a mailbox presaentation modot
+            if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+                return availablePresentMode;
+            }
+        }
+        //ha nicns akkor az alappal térünk vissza
+        return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    // Meghatározza a swap chain képek felbontását (szélesség és magasság pixelben)
+    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+        // Ha a currentExtent.width != UINT32_MAX, akkor a window manager már meghatározta
+        // az ideális felbontást, amit kötelezően használnunk kell
+        //a numeric:limits az adott típus maximum értékeét adja vissza
+        //általában a fejlesztők pl windowsnál megadják fix értéknek a maxopt hogy tudjam nem kell beállítani
+        //dep l mobilnál nem adják meg és ott muszáj
+        if (capabilities.currentExtent.width != numeric_limits<uint32_t>::max()) {
+            return capabilities.currentExtent;
+        } else {
+            // Ha a width == UINT32_MAX, akkor mi magunk választhatjuk meg a felbontást
+            // az ablak tényleges mérete alapján
+            int width, height;
+            // Lekérdezzük az ablak framebuffer méretét pixelben (nem ablakméret!)
+            // Ez különbözhet az ablak logikai méretétől high-DPI kijelzőkön
+            glfwGetFramebufferSize(window, &width, &height);
+
+            // Létrehozzuk a választott extent struktúrát, int-ről uint32_t-re castolva
+            VkExtent2D actualExtent = {
+                static_cast<uint32_t>(width),
+                static_cast<uint32_t>(height)
+            };
+
+            // Biztosítjuk, hogy a választott szélesség a megengedett tartományban legyen
+            // (nem lehet kisebb a minimum-nál, nem lehet nagyobb a maximum-nál)
+            actualExtent.width = clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+            // Ugyanez a magasságra is
+            actualExtent.height = clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+            // Visszaadjuk a korrigált, érvényes felbontást
+            return actualExtent;
+        }
+    }
+
 
 
     void initVulkan()
