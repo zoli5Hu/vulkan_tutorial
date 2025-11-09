@@ -785,6 +785,28 @@ private:
         dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
         // Pointer a dinamikus állapotok tömbjére (a vektor első elemének címe)
         dynamicState.pDynamicStates = dynamicStates.data();
+
+            // Vertex input state struktúra létrehozása (megadja, hogyan kell értelmezni a vertex adatokat)
+            VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+            // Beállítjuk a struktúra típusát
+            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            // Hány vertex binding leírást használunk (0, mert most a shaderben hardcode-oljuk a pozíciókat)
+            vertexInputInfo.vertexBindingDescriptionCount = 0;
+            // Pointer a vertex binding leírásokra (nullptr, mert most nincs vertex buffer)
+            vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
+            // Hány vertex attribútum leírást használunk (0, mert a shaderben adjuk meg a pozíciókat)
+            vertexInputInfo.vertexAttributeDescriptionCount = 0;
+            // Pointer a vertex attribútum leírásokra (nullptr, mert most nincs vertex buffer)
+            vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+
+            // Input assembly state struktúra létrehozása (megadja, hogyan kell összerakni a vertexeket primitívekké)
+            VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+            // Beállítjuk a struktúra típusát
+            inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            // Milyen primitíveket rajzoljunk (TRIANGLE_LIST = minden 3 vertex egy háromszög, nem megosztottak)
+            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            // Primitive restart engedélyezése (VK_FALSE = nem használjuk, csak strip/fan topológiánál hasznos)
+            inputAssembly.primitiveRestartEnable = VK_FALSE;
     }
 
 
