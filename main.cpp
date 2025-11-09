@@ -745,35 +745,29 @@ private:
 
     void createRenderPass() {
         /**
-         * Ez a függvény létrehozza a Render Pass-t (Renderelési Fázist).
-         * A Render Pass leírja, hogy a GPU-nak hogyan kell kezelnie a framebuffer
-         * csatolmányokat (attachment) a renderelési folyamat során.
-         *
-         * A kód a színpuffer csatolmányát (color attachment) definiálja:
-         * 1. Formátum és mintavételezés (Format, Samples).
-         * 2. Műveletek (loadOp, storeOp) a szín adatokra a fázis elején és végén.
-         * 3. Műveletek (stencilLoadOp, stencilStoreOp) a stencil adatokra.
-         * 4. Kép elrendezésének (Layout) váltása a fázis előtt és után.
-         */
-        /**
-         * A VkAttachmentDescription struktúra definiálja az egyik csatolmányt (itt: színpuffer).
-         * - A 'format' a Swap Chain képének formátumával egyezik.
-         * - Az 'samples' beállítja, hogy nincs multi-sampling (1 minta/pixel).
-         * - A 'loadOp = CLEAR' törli a buffert a rajzolás megkezdése előtt.
-         * - A 'storeOp = STORE' elmenti a renderelt eredményt a memóriában.
-         * - A stencil műveleteket figyelmen kívül hagyjuk (DONT_CARE), mivel nem használunk stencilt.
-         * - Az 'initialLayout = UNDEFINED' jelzi, hogy nem érdekel az előző elrendezés (hiszen töröljük az adatot).
-         * - A 'finalLayout = PRESENT_SRC_KHR' automatikusan felkészíti a képet a képernyőre való prezentálásra a Render Pass befejeztével.
-         */
-        VkAttachmentDescription colorAttachment{};
-        colorAttachment.format = swapChainImageFormat;
-        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  * Ez a rész egy egyszerű Vulkan render pass alapját készíti elő:
+  * beállítja a szín attachmentet, annak használatát és a subpass leírását.
+  */
+        VkAttachmentDescription colorAttachment{}; // A render pass egyik "attachment"-jének (képének) leírása
+        colorAttachment.format = swapChainImageFormat; // A swapchain formátumát használja, hogy a képernyőre lehessen kirajzolni
+        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // Nincs multisampling, 1 mintát használ pixelként
+        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // A subpass elején törli (clear) a szín buffert
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // A rajzolás után elmenti, hogy a képernyőre lehessen küldeni
+        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // A stencil értékeket nem használjuk, nem érdekes a betöltésük
+        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // A stencil értékeket nem mentjük el
+        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Kezdetben a kép layoutja ismeretlen (Vulkan majd beállítja)
+        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // A renderelés végén a kép készen áll megjelenítésre a képernyőn
+
+        VkAttachmentReference colorAttachmentRef{}; // Hivatkozás a fent létrehozott attachmentre
+        colorAttachmentRef.attachment = 0; // Ez az első (0. indexű) attachment az attachment tömbben
+        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // A subpass alatt szín bufferként használjuk
+
+        VkSubpassDescription subpass{}; // Egy subpass leírása a render pass-on belül
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // Ez egy grafikus subpass (nem compute)
+        subpass.colorAttachmentCount = 1; // Egy szín attachmentet használ a subpass
+        subpass.pColorAttachments = &colorAttachmentRef; // A korábban létrehozott colorAttachmentRef-et használja
+
+
 
     }
 
