@@ -88,6 +88,9 @@ private:
 
     vector<VkFramebuffer> swapChainFramebuffers;
 
+    VkCommandPool commandPool;
+
+
 
     //swapchan setup start extension enable
     const vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
@@ -670,6 +673,7 @@ private:
         createRenderPass();
         createGraphicsPipeline();
         createFramebuffers();
+        createCommandPool();
 
     }
 
@@ -1070,6 +1074,19 @@ private:
         }
     }
 
+    void createCommandPool() {
+        QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice); // Megkeressük a grafikus queue family indexet a fizikai eszközön
+
+        VkCommandPoolCreateInfo poolInfo{}; // Létrehozunk egy struktúrát a command pool beállításaihoz
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO; // Megadjuk a struktúra típusát Vulkan számára
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Lehetővé tesszük, hogy a command buffer-eket egyenként újra lehessen rögzíteni
+        poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value(); // A pool a grafikus queue family-hoz lesz kötve
+
+        if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) { // Létrehozzuk a command pool-t a Vulkan API-val
+            throw std::runtime_error("failed to create command pool!"); // Hibakezelés, ha a létrehozás nem sikerül
+        }
+    }
+
 
 
     // Létrehozza a swap chain-t, amely a képernyőre kerülő képek puffereit kezeli
@@ -1203,6 +1220,9 @@ private:
 
     void cleanup()
     {
+        //felszabadítja command poolt
+        vkDestroyCommandPool(device, commandPool, nullptr);
+
         //felszabadítja a framebufferket
         for (auto framebuffer : swapChainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, nullptr);
