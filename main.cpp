@@ -1297,6 +1297,9 @@ private:
 
         vkResetFences(device, 1, &inFlightFence);
         // Reseteljük a fence-t, hogy újra használható legyen a következő frame rendereléséhez
+
+        uint32_t imageIndex;
+        vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
     }
 
     void initWindow()
