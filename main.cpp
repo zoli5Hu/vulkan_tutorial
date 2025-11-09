@@ -1316,6 +1316,26 @@ private:
 
         recordCommandBuffer(commandBuffer, imageIndex);
         /**/ // Feljegyezzük a parancsokat a command buffer-be az aktuális swap chain képhez (pl. pipeline bind, draw call)
+
+        VkSubmitInfo submitInfo{}; // Létrehozunk egy struktúrát, ami leírja, hogyan szeretnénk benyújtani a parancsokat a GPU-nak
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO; // Megadjuk a struktúra típusát
+
+        VkSemaphore waitSemaphores[] = {imageAvailableSemaphore}; // Semaphore, amire várni kell, mielőtt a parancsok végrehajtódnak (itt a swap chain kép elérhetősége)
+        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT}; // A GPU melyik szakaszában várjon a semaphore jelzésére
+        submitInfo.waitSemaphoreCount = 1; // Hány semaphore-ra kell várni
+        submitInfo.pWaitSemaphores = waitSemaphores; // Pointer a várakozó semaphore tömbre
+        submitInfo.pWaitDstStageMask = waitStages; // Pointer a várakozási stage tömbre
+        submitInfo.commandBufferCount = 1; // Hány command buffer-t adunk be
+        submitInfo.pCommandBuffers = &commandBuffer; // Pointer a command buffer-hez, amit végre kell hajtani
+
+        VkSemaphore signalSemaphores[] = {renderFinishedSemaphore}; // Semaphore, amit a GPU jelzésekor jelezni fog, hogy a render kész
+        submitInfo.signalSemaphoreCount = 1; // Hány semaphore-ot jelezzen a GPU a végrehajtás után
+        submitInfo.pSignalSemaphores = signalSemaphores; // Pointer a signal semaphore tömbre
+
+        if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) { // Benyújtjuk a command buffer-t a graphics queue-ra, inFlightFence jelez, mikor végzett
+            throw std::runtime_error("failed to submit draw command buffer!"); // Hiba dobása, ha a benyújtás nem sikerült
+        }
+
     }
 
     void initWindow()
