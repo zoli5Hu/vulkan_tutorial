@@ -91,6 +91,10 @@ private:
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
 
+    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore renderFinishedSemaphore;
+    VkFence inFlightFence;
+
 
 
     //swapchan setup start extension enable
@@ -676,7 +680,7 @@ private:
         createFramebuffers();
         createCommandPool();
         createCommandBuffer();
-
+        createSyncObjects();
 
     }
 
@@ -712,7 +716,6 @@ private:
             }
         }
     }
-
 
     // Fájlt olvas be bájtokként és visszaadja egy vector<char>-ben
     static vector<char> readFile(const string& filename)
@@ -797,7 +800,6 @@ private:
 
 
     }
-
 
     void createGraphicsPipeline()
     {
@@ -1269,6 +1271,34 @@ private:
         swapChainExtent = extent; // Elmenti a swap chain felbontását későbbi használatra
     }
 
+    void createSyncObjects()
+    {
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        // Létrehozunk egy semaphore info struktúrát, ami jelzi a semaphore típusát
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        // Létrehozunk egy fence info struktúrát, kezdéskor signaled állapotban
+
+        if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
+            vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS ||
+            vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create semaphores!");
+            // Létrehozzuk a semaphore-okat és a fence-t, ha bármelyik sikertelen, hibát dobunk
+        }
+    }
+
+    void drawFrame() {
+        vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+        // Várunk, amíg a GPU befejezi az előző frame-et (inFlightFence jelzett állapota)
+
+        vkResetFences(device, 1, &inFlightFence);
+        // Reseteljük a fence-t, hogy újra használható legyen a következő frame rendereléséhez
+    }
+
     void initWindow()
     {
         glfwInit();
@@ -1282,15 +1312,20 @@ private:
 
     void mainLoop()
     {
-        while (!glfwWindowShouldClose(window))
-        {
+        while (!glfwWindowShouldClose(window)) {
             //ez ellenőrzi hogy be akarom e csukni az a ablakot (vagy más események)
             glfwPollEvents();
+            drawFrame();
         }
+
     }
 
     void cleanup()
     {
+        //felszabadítja a szinkronizációkat
+        vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+        vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+        vkDestroyFence(device, inFlightFence, nullptr);
         //felszabadítja command poolt
         vkDestroyCommandPool(device, commandPool, nullptr);
 
