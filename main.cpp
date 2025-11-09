@@ -89,6 +89,7 @@ private:
     vector<VkFramebuffer> swapChainFramebuffers;
 
     VkCommandPool commandPool;
+    VkCommandBuffer commandBuffer;
 
 
 
@@ -674,6 +675,8 @@ private:
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPool();
+        createCommandBuffer();
+
 
     }
 
@@ -1087,6 +1090,17 @@ private:
         }
     }
 
+    void createCommandBuffer() {
+        VkCommandBufferAllocateInfo allocInfo{}; // Létrehozunk egy struktúrát az allokálási információkhoz
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO; // Megadjuk a struktúra típusát Vulkan számára
+        allocInfo.commandPool = commandPool; // Meghatározzuk, hogy melyik command pool-ból allokáljuk a buffer-t
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // Primary buffer, amit közvetlenül lehet submit-elni a GPU queue-ra
+        allocInfo.commandBufferCount = 1; // Csak egy command buffer-t akarunk létrehozni
+
+        if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) != VK_SUCCESS) { // Létrehozzuk a command buffer-t a Vulkan API-val
+            throw std::runtime_error("failed to allocate command buffers!"); // Hibakezelés, ha a buffer allokálása nem sikerül
+        }
+    }
 
 
     // Létrehozza a swap chain-t, amely a képernyőre kerülő képek puffereit kezeli
