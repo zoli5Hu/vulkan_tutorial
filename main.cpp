@@ -733,15 +733,28 @@ private:
 
 
     void createGraphicsPipeline() {
-        auto vertShaderCode = readFile("shaders/vert.spv");
-        auto fragShaderCode = readFile("shaders/frag.spv");
+        auto vertShaderCode = readFile("shaders/vert.spv"); // Beolvassa a vertex shader SPIR-V bytecode-ot
+        auto fragShaderCode = readFile("shaders/frag.spv"); // Beolvassa a fragment shader SPIR-V bytecode-ot
 
-        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode); // Létrehozza a vertex shader modult a Vulkan számára
+        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode); // Létrehozza a fragment shader modult a Vulkan számára
 
+        VkPipelineShaderStageCreateInfo vertShaderStageInfo{}; // Vertex shader stage konfiguráció struktúra
+        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; // Struktúra típus megadása
+        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT; // Megadja hogy ez vertex shader
+        vertShaderStageInfo.module = vertShaderModule; // A shader modul referenciája
+        vertShaderStageInfo.pName = "main"; // A shader belépési pontja (main függvény)
 
-        vkDestroyShaderModule(device, fragShaderModule, nullptr);
-        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        VkPipelineShaderStageCreateInfo fragShaderStageInfo{}; // Fragment shader stage konfiguráció struktúra
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; // Struktúra típus megadása
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT; // Megadja hogy ez fragment shader
+        fragShaderStageInfo.module = fragShaderModule; // A shader modul referenciája
+        fragShaderStageInfo.pName = "main"; // A shader belépési pontja (main függvény)
+
+        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo}; // Shader stage-ek tömbje a pipeline-nak
+
+        vkDestroyShaderModule(device, fragShaderModule, nullptr); // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
+        vkDestroyShaderModule(device, vertShaderModule, nullptr); // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
     }
 
 
