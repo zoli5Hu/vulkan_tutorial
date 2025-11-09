@@ -743,99 +743,146 @@ private:
 
     void createGraphicsPipeline()
     {
-        auto vertShaderCode = readFile("shaders/vert.spv"); // Beolvassa a vertex shader SPIR-V bytecode-ot
-        auto fragShaderCode = readFile("shaders/frag.spv"); // Beolvassa a fragment shader SPIR-V bytecode-ot
-
-        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-        // Létrehozza a vertex shader modult a Vulkan számára
-        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
-        // Létrehozza a fragment shader modult a Vulkan számára
-
-        VkPipelineShaderStageCreateInfo vertShaderStageInfo{}; // Vertex shader stage konfiguráció struktúra
-        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; // Struktúra típus megadása
-        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT; // Megadja hogy ez vertex shader
-        vertShaderStageInfo.module = vertShaderModule; // A shader modul referenciája
-        vertShaderStageInfo.pName = "main"; // A shader belépési pontja (main függvény)
-
-        VkPipelineShaderStageCreateInfo fragShaderStageInfo{}; // Fragment shader stage konfiguráció struktúra
-        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; // Struktúra típus megadása
-        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT; // Megadja hogy ez fragment shader
-        fragShaderStageInfo.module = fragShaderModule; // A shader modul referenciája
-        fragShaderStageInfo.pName = "main"; // A shader belépési pontja (main függvény)
-
-        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
-        // Shader stage-ek tömbje a pipeline-nak
-
-
-        // Dinamikus állapotok listája – olyan pipeline beállítások, amiket nem fix értékkel adunk meg, hanem futásidőben (draw time-ban) állítunk be
-        vector<VkDynamicState> dynamicStates = {
-            VK_DYNAMIC_STATE_VIEWPORT, // A viewport (látómező) mérete és pozíciója dinamikusan állítható lesz
-            VK_DYNAMIC_STATE_SCISSOR // A scissor (vágási terület) mérete és pozíciója dinamikusan állítható lesz
-        };
-
-        // Létrehozunk egy üres struktúrát a dinamikus állapotok konfigurálásához (minden mező 0/nullptr lesz)
-        VkPipelineDynamicStateCreateInfo dynamicState{};
-        // Beállítjuk a struktúra típusát, hogy a Vulkan tudja mit kap paraméterként
-        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        // Megadjuk hány dinamikus állapotot akarunk használni (a vektor mérete, size_t-ről uint32_t-re castolva)
-        dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-        // Pointer a dinamikus állapotok tömbjére (a vektor első elemének címe)
-        dynamicState.pDynamicStates = dynamicStates.data();
-
-        // Vertex input state struktúra létrehozása (megadja, hogyan kell értelmezni a vertex adatokat)
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-        // Beállítjuk a struktúra típusát
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        // Hány vertex binding leírást használunk (0, mert most a shaderben hardcode-oljuk a pozíciókat)
-        vertexInputInfo.vertexBindingDescriptionCount = 0;
-        // Pointer a vertex binding leírásokra (nullptr, mert most nincs vertex buffer)
-        vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-        // Hány vertex attribútum leírást használunk (0, mert a shaderben adjuk meg a pozíciókat)
-        vertexInputInfo.vertexAttributeDescriptionCount = 0;
-        // Pointer a vertex attribútum leírásokra (nullptr, mert most nincs vertex buffer)
-        vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
-
-        // Input assembly state struktúra létrehozása (megadja, hogyan kell összerakni a vertexeket primitívekké)
-        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-        // Beállítjuk a struktúra típusát
-        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        // Milyen primitíveket rajzoljunk (TRIANGLE_LIST = minden 3 vertex egy háromszög, nem megosztottak)
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        // Primitive restart engedélyezése (VK_FALSE = nem használjuk, csak strip/fan topológiánál hasznos)
-        inputAssembly.primitiveRestartEnable = VK_FALSE;
+            /*
+             * Shader fájlok beolvasása
+             * - vertShaderCode: vertex shader SPIR-V bytecode
+             * - fragShaderCode: fragment shader SPIR-V bytecode
+             */
+            auto vertShaderCode = readFile("shaders/vert.spv");
+            auto fragShaderCode = readFile("shaders/frag.spv");
 
             /*
-             * Viewport konfiguráció - meghatározza a framebuffer mely részére rendereljünk
-             * - x, y: bal felső sarok pozíciója (0,0 = bal felső sarok)
-             * - width, height: viewport mérete pixelben (swap chain méretével egyezik)
-             * - minDepth, maxDepth: mélységi puffer tartomány (0.0-1.0 a Vulkan szabvány)
-             * A viewport átalakítja a normalized device coordinates (-1 és +1 között) értékeket képernyő koordinátákká
+             * Shader modulok létrehozása a Vulkan számára
+             * - vertShaderModule: vertex shader modul
+             * - fragShaderModule: fragment shader modul
              */
-            VkViewport viewport{};
-            viewport.x = 0.0f;
-            viewport.y = 0.0f;
-            viewport.width = (float)swapChainExtent.width;
-            viewport.height = (float)swapChainExtent.height;
-            viewport.minDepth = 0.0f;
-            viewport.maxDepth = 1.0f;
+            VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+            VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
 
             /*
-             * Scissor konfiguráció - vágási téglalap amely korlátozza hova lehet rajzolni
-             * - offset: eltolás pixelben {0, 0} = bal felső sarok, nincs eltolás
-             * - extent: scissor mérete (teljes swap chain méret = egész képernyőre rajzolunk)
-             * Minden ami a scissor téglapaon kívül esik, eldobásra kerül
+             * Vertex shader stage konfiguráció
+             * - sType: struktúra típus megadása
+             * - stage: megadja hogy ez vertex shader
+             * - module: a shader modul referenciája
+             * - pName: a shader belépési pontja (main függvény)
              */
-            VkRect2D scissor{};
-            scissor.offset = {0, 0};
-            scissor.extent = swapChainExtent;
+            VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+            vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+            vertShaderStageInfo.module = vertShaderModule;
+            vertShaderStageInfo.pName = "main";
+
+            /*
+             * Fragment shader stage konfiguráció
+             * - sType: struktúra típus megadása
+             * - stage: megadja hogy ez fragment shader
+             * - module: a shader modul referenciája
+             * - pName: a shader belépési pontja (main függvény)
+             */
+            VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+            fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            fragShaderStageInfo.module = fragShaderModule;
+            fragShaderStageInfo.pName = "main";
+
+            /*
+             * Shader stage-ek tömbje a pipeline-nak
+             * Tartalmazza mind a vertex, mind a fragment shader konfigurációját
+             */
+            VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
 
-        vkDestroyShaderModule(device, fragShaderModule, nullptr);
-        // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
-        vkDestroyShaderModule(device, vertShaderModule, nullptr);
-        // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
+            /*
+             * Dinamikus állapotok listája
+             * Olyan pipeline beállítások, amiket nem fix értékkel adunk meg, hanem futásidőben állítunk be
+             * - VK_DYNAMIC_STATE_VIEWPORT: viewport mérete és pozíciója dinamikusan állítható
+             * - VK_DYNAMIC_STATE_SCISSOR: scissor mérete és pozíciója dinamikusan állítható
+             */
+            vector<VkDynamicState> dynamicStates = {
+                VK_DYNAMIC_STATE_VIEWPORT,
+                VK_DYNAMIC_STATE_SCISSOR
+            };
+
+            /*
+             * Dinamikus állapotok konfigurációs struktúra
+             * - sType: struktúra típus
+             * - dynamicStateCount: hány dinamikus állapotot használunk
+             * - pDynamicStates: pointer a dinamikus állapotok tömbjére
+             */
+            VkPipelineDynamicStateCreateInfo dynamicState{};
+            dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+            dynamicState.pDynamicStates = dynamicStates.data();
+
+            /*
+             * Viewport state konfiguráció
+             * A tényleges viewport és scissor értékeket majd később állítjuk be rajzoláskor (draw time)
+             * - viewportCount: 1 viewport-ot használunk
+             * - scissorCount: 1 scissor-t használunk
+             */
+            VkPipelineViewportStateCreateInfo viewportState{};
+            viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            viewportState.viewportCount = 1;
+            viewportState.scissorCount = 1;
+
+            /*
+             * Vertex input state konfiguráció
+             * Megadja, hogyan kell értelmezni a vertex adatokat
+             * - vertexBindingDescriptionCount: 0 (shaderben hardcode-oljuk a pozíciókat)
+             * - pVertexBindingDescriptions: nullptr (nincs vertex buffer)
+             * - vertexAttributeDescriptionCount: 0 (shaderben adjuk meg a pozíciókat)
+             * - pVertexAttributeDescriptions: nullptr (nincs vertex buffer)
+             */
+            VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            vertexInputInfo.vertexBindingDescriptionCount = 0;
+            vertexInputInfo.pVertexBindingDescriptions = nullptr;
+            vertexInputInfo.vertexAttributeDescriptionCount = 0;
+            vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+
+            /*
+             * Input assembly state konfiguráció
+             * Megadja, hogyan kell összerakni a vertexeket primitívekké
+             * - topology: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST (minden 3 vertex egy háromszög, nem megosztottak)
+             * - primitiveRestartEnable: VK_FALSE (nem használjuk, csak strip/fan topológiánál hasznos)
+             */
+            VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+            inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 
+        /*
+        * Rasterization state konfiguráció
+        * A raszterizáló beállításai, amely a geometriát fragmentekké (pixelekké) alakítja
+        * - sType: struktúra típus
+        * - depthClampEnable: VK_FALSE = látótávolságon kívüli elemeket eldobja (nem clampeli)
+        * - rasterizerDiscardEnable: VK_FALSE = a raszterizálás nem kerül eldobásra (folytatódik)
+        * - polygonMode: VK_POLYGON_MODE_FILL = a háromszögeket kitölti (nem wireframe/point) pl wireframméél alaakítás
+        * - lineWidth: 1.0f = vonalvastagság (wireframe módnál számít)
+        * - cullMode: VK_CULL_MODE_BACK_BIT = hátul lévő háromszögeket nem rajzolja (face culling)
+        * - frontFace: VK_FRONT_FACE_CLOCKWISE = óramutató járása szerint vannak az elülső háromszögek
+        * - depthBiasEnable: VK_FALSE = nem használ depth bias-t (shadow mapping-nél hasznos)
+        * - depthBiasConstantFactor, depthBiasClamp, depthBiasSlopeFactor: opcionális depth bias értékek
+        */
+        VkPipelineRasterizationStateCreateInfo rasterizer{};
+        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizer.depthClampEnable = VK_FALSE;
+        rasterizer.rasterizerDiscardEnable = VK_FALSE;
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizer.lineWidth = 1.0f;
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizer.depthBiasEnable = VK_FALSE;
+        rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+        rasterizer.depthBiasClamp = 0.0f; // Optional
+        rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+
+
+            vkDestroyShaderModule(device, fragShaderModule, nullptr);
+            // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
+            vkDestroyShaderModule(device, vertShaderModule, nullptr);
+            // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
 
     }
 
