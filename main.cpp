@@ -890,6 +890,48 @@ private:
 
         //ha lenen stancilünk vagy depthünk itt kéne konfigurálni
 
+            /*
+             * Color blend attachment konfiguráció (egy render target színkeverési beállításai)
+             * - colorWriteMask: mely színcsatornákat írjuk (R, G, B, A mind engedélyezve)
+             * - blendEnable: VK_FALSE = nincs színkeverés (az új szín felülírja a régit)
+             * - srcColorBlendFactor: forrás szín szorzója (ONE = 1.0, nincs hatása ha blendEnable=false)
+             * - dstColorBlendFactor: cél szín szorzója (ZERO = 0.0, nincs hatása ha blendEnable=false)
+             * - colorBlendOp: színkeverési művelet (ADD = összeadás)
+             * - srcAlphaBlendFactor: forrás alfa szorzója
+             * - dstAlphaBlendFactor: cél alfa szorzója
+             * - alphaBlendOp: alfa keverési művelet
+             */
+            VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+            colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_A_BIT;
+            colorBlendAttachment.blendEnable = VK_FALSE;
+            colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+            colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+            colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+            colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+            colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+            colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+
+            /*
+             * Color blending globális konfiguráció (az összes framebuffer attachmentre vonatkozik)
+             * - sType: struktúra típus
+             * - logicOpEnable: VK_FALSE = logikai műveletek kikapcsolva (bitwise operációk mint AND, OR)
+             * - logicOp: logikai művelet típusa (COPY = másolás, nincs hatása ha logicOpEnable=false)
+             * - attachmentCount: hány attachment-et használunk (1 = egy render target)
+             * - pAttachments: pointer az attachment konfigurációra
+             * - blendConstants: globális keverési konstansok (RGBA, mindegyik 0.0)
+             */
+            VkPipelineColorBlendStateCreateInfo colorBlending{};
+            colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            colorBlending.logicOpEnable = VK_FALSE;
+            colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
+            colorBlending.attachmentCount = 1;
+            colorBlending.pAttachments = &colorBlendAttachment;
+            colorBlending.blendConstants[0] = 0.0f; // Optional
+            colorBlending.blendConstants[1] = 0.0f; // Optional
+            colorBlending.blendConstants[2] = 0.0f; // Optional
+            colorBlending.blendConstants[3] = 0.0f; // Optional
+
+
 
             vkDestroyShaderModule(device, fragShaderModule, nullptr);
             // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
