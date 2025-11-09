@@ -81,7 +81,11 @@ private:
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent;
 
+    VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
+
+    VkPipeline graphicsPipeline;
+
 
     //swapchan setup start extension enable
     const vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
@@ -767,6 +771,18 @@ private:
         subpass.colorAttachmentCount = 1; // Egy szín attachmentet használ a subpass
         subpass.pColorAttachments = &colorAttachmentRef; // A korábban létrehozott colorAttachmentRef-et használja
 
+        //render pass létrehozása
+        VkRenderPassCreateInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount = 1;
+        renderPassInfo.pAttachments = &colorAttachment;
+        renderPassInfo.subpassCount = 1;
+        renderPassInfo.pSubpasses = &subpass;
+
+        if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create render pass!");
+        }
+
 
 
     }
@@ -774,113 +790,113 @@ private:
 
     void createGraphicsPipeline()
     {
-            /*
-             * Shader fájlok beolvasása
-             * - vertShaderCode: vertex shader SPIR-V bytecode
-             * - fragShaderCode: fragment shader SPIR-V bytecode
-             */
-            auto vertShaderCode = readFile("shaders/vert.spv");
-            auto fragShaderCode = readFile("shaders/frag.spv");
+        /*
+         * Shader fájlok beolvasása
+         * - vertShaderCode: vertex shader SPIR-V bytecode
+         * - fragShaderCode: fragment shader SPIR-V bytecode
+         */
+        auto vertShaderCode = readFile("shaders/vert.spv");
+        auto fragShaderCode = readFile("shaders/frag.spv");
 
-            /*
-             * Shader modulok létrehozása a Vulkan számára
-             * - vertShaderModule: vertex shader modul
-             * - fragShaderModule: fragment shader modul
-             */
-            VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-            VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+        /*
+         * Shader modulok létrehozása a Vulkan számára
+         * - vertShaderModule: vertex shader modul
+         * - fragShaderModule: fragment shader modul
+         */
+        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
 
-            /*
-             * Vertex shader stage konfiguráció
-             * - sType: struktúra típus megadása
-             * - stage: megadja hogy ez vertex shader
-             * - module: a shader modul referenciája
-             * - pName: a shader belépési pontja (main függvény)
-             */
-            VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-            vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-            vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-            vertShaderStageInfo.module = vertShaderModule;
-            vertShaderStageInfo.pName = "main";
+        /*
+         * Vertex shader stage konfiguráció
+         * - sType: struktúra típus megadása
+         * - stage: megadja hogy ez vertex shader
+         * - module: a shader modul referenciája
+         * - pName: a shader belépési pontja (main függvény)
+         */
+        VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertShaderStageInfo.module = vertShaderModule;
+        vertShaderStageInfo.pName = "main";
 
-            /*
-             * Fragment shader stage konfiguráció
-             * - sType: struktúra típus megadása
-             * - stage: megadja hogy ez fragment shader
-             * - module: a shader modul referenciája
-             * - pName: a shader belépési pontja (main függvény)
-             */
-            VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-            fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-            fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-            fragShaderStageInfo.module = fragShaderModule;
-            fragShaderStageInfo.pName = "main";
+        /*
+         * Fragment shader stage konfiguráció
+         * - sType: struktúra típus megadása
+         * - stage: megadja hogy ez fragment shader
+         * - module: a shader modul referenciája
+         * - pName: a shader belépési pontja (main függvény)
+         */
+        VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragShaderStageInfo.module = fragShaderModule;
+        fragShaderStageInfo.pName = "main";
 
-            /*
-             * Shader stage-ek tömbje a pipeline-nak
-             * Tartalmazza mind a vertex, mind a fragment shader konfigurációját
-             */
-            VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        /*
+         * Shader stage-ek tömbje a pipeline-nak
+         * Tartalmazza mind a vertex, mind a fragment shader konfigurációját
+         */
+        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
 
-            /*
-             * Dinamikus állapotok listája
-             * Olyan pipeline beállítások, amiket nem fix értékkel adunk meg, hanem futásidőben állítunk be
-             * - VK_DYNAMIC_STATE_VIEWPORT: viewport mérete és pozíciója dinamikusan állítható
-             * - VK_DYNAMIC_STATE_SCISSOR: scissor mérete és pozíciója dinamikusan állítható
-             */
-            vector<VkDynamicState> dynamicStates = {
-                VK_DYNAMIC_STATE_VIEWPORT,
-                VK_DYNAMIC_STATE_SCISSOR
-            };
+        /*
+         * Dinamikus állapotok listája
+         * Olyan pipeline beállítások, amiket nem fix értékkel adunk meg, hanem futásidőben állítunk be
+         * - VK_DYNAMIC_STATE_VIEWPORT: viewport mérete és pozíciója dinamikusan állítható
+         * - VK_DYNAMIC_STATE_SCISSOR: scissor mérete és pozíciója dinamikusan állítható
+         */
+        vector<VkDynamicState> dynamicStates = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR
+        };
 
-            /*
-             * Dinamikus állapotok konfigurációs struktúra
-             * - sType: struktúra típus
-             * - dynamicStateCount: hány dinamikus állapotot használunk
-             * - pDynamicStates: pointer a dinamikus állapotok tömbjére
-             */
-            VkPipelineDynamicStateCreateInfo dynamicState{};
-            dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-            dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-            dynamicState.pDynamicStates = dynamicStates.data();
+        /*
+         * Dinamikus állapotok konfigurációs struktúra
+         * - sType: struktúra típus
+         * - dynamicStateCount: hány dinamikus állapotot használunk
+         * - pDynamicStates: pointer a dinamikus állapotok tömbjére
+         */
+        VkPipelineDynamicStateCreateInfo dynamicState{};
+        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+        dynamicState.pDynamicStates = dynamicStates.data();
 
-            /*
-             * Viewport state konfiguráció
-             * A tényleges viewport és scissor értékeket majd később állítjuk be rajzoláskor (draw time)
-             * - viewportCount: 1 viewport-ot használunk
-             * - scissorCount: 1 scissor-t használunk
-             */
-            VkPipelineViewportStateCreateInfo viewportState{};
-            viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-            viewportState.viewportCount = 1;
-            viewportState.scissorCount = 1;
+        /*
+         * Viewport state konfiguráció
+         * A tényleges viewport és scissor értékeket majd később állítjuk be rajzoláskor (draw time)
+         * - viewportCount: 1 viewport-ot használunk
+         * - scissorCount: 1 scissor-t használunk
+         */
+        VkPipelineViewportStateCreateInfo viewportState{};
+        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewportState.viewportCount = 1;
+        viewportState.scissorCount = 1;
 
-            /*
-             * Vertex input state konfiguráció
-             * Megadja, hogyan kell értelmezni a vertex adatokat
-             * - vertexBindingDescriptionCount: 0 (shaderben hardcode-oljuk a pozíciókat)
-             * - pVertexBindingDescriptions: nullptr (nincs vertex buffer)
-             * - vertexAttributeDescriptionCount: 0 (shaderben adjuk meg a pozíciókat)
-             * - pVertexAttributeDescriptions: nullptr (nincs vertex buffer)
-             */
-            VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-            vertexInputInfo.vertexBindingDescriptionCount = 0;
-            vertexInputInfo.pVertexBindingDescriptions = nullptr;
-            vertexInputInfo.vertexAttributeDescriptionCount = 0;
-            vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+        /*
+         * Vertex input state konfiguráció
+         * Megadja, hogyan kell értelmezni a vertex adatokat
+         * - vertexBindingDescriptionCount: 0 (shaderben hardcode-oljuk a pozíciókat)
+         * - pVertexBindingDescriptions: nullptr (nincs vertex buffer)
+         * - vertexAttributeDescriptionCount: 0 (shaderben adjuk meg a pozíciókat)
+         * - pVertexAttributeDescriptions: nullptr (nincs vertex buffer)
+         */
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertexInputInfo.vertexBindingDescriptionCount = 0;
+        vertexInputInfo.pVertexBindingDescriptions = nullptr;
+        vertexInputInfo.vertexAttributeDescriptionCount = 0;
+        vertexInputInfo.pVertexAttributeDescriptions = nullptr;
 
-            /*
-             * Input assembly state konfiguráció
-             * Megadja, hogyan kell összerakni a vertexeket primitívekké
-             * - topology: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST (minden 3 vertex egy háromszög, nem megosztottak)
-             * - primitiveRestartEnable: VK_FALSE (nem használjuk, csak strip/fan topológiánál hasznos)
-             */
-            VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-            inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-            inputAssembly.primitiveRestartEnable = VK_FALSE;
+        /*
+         * Input assembly state konfiguráció
+         * Megadja, hogyan kell összerakni a vertexeket primitívekké
+         * - topology: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST (minden 3 vertex egy háromszög, nem megosztottak)
+         * - primitiveRestartEnable: VK_FALSE (nem használjuk, csak strip/fan topológiánál hasznos)
+         */
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 
         /*
@@ -921,46 +937,47 @@ private:
 
         //ha lenen stancilünk vagy depthünk itt kéne konfigurálni
 
-            /*
-             * Color blend attachment konfiguráció (egy render target színkeverési beállításai)
-             * - colorWriteMask: mely színcsatornákat írjuk (R, G, B, A mind engedélyezve)
-             * - blendEnable: VK_FALSE = nincs színkeverés (az új szín felülírja a régit)
-             * - srcColorBlendFactor: forrás szín szorzója (ONE = 1.0, nincs hatása ha blendEnable=false)
-             * - dstColorBlendFactor: cél szín szorzója (ZERO = 0.0, nincs hatása ha blendEnable=false)
-             * - colorBlendOp: színkeverési művelet (ADD = összeadás)
-             * - srcAlphaBlendFactor: forrás alfa szorzója
-             * - dstAlphaBlendFactor: cél alfa szorzója
-             * - alphaBlendOp: alfa keverési művelet
-             */
-            VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-            colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_A_BIT;
-            colorBlendAttachment.blendEnable = VK_FALSE;
-            colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-            colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-            colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-            colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-            colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-            colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+        /*
+         * Color blend attachment konfiguráció (egy render target színkeverési beállításai)
+         * - colorWriteMask: mely színcsatornákat írjuk (R, G, B, A mind engedélyezve)
+         * - blendEnable: VK_FALSE = nincs színkeverés (az új szín felülírja a régit)
+         * - srcColorBlendFactor: forrás szín szorzója (ONE = 1.0, nincs hatása ha blendEnable=false)
+         * - dstColorBlendFactor: cél szín szorzója (ZERO = 0.0, nincs hatása ha blendEnable=false)
+         * - colorBlendOp: színkeverési művelet (ADD = összeadás)
+         * - srcAlphaBlendFactor: forrás alfa szorzója
+         * - dstAlphaBlendFactor: cél alfa szorzója
+         * - alphaBlendOp: alfa keverési művelet
+         */
+        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+            VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_A_BIT;
+        colorBlendAttachment.blendEnable = VK_FALSE;
+        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
 
-            /*
-             * Color blending globális konfiguráció (az összes framebuffer attachmentre vonatkozik)
-             * - sType: struktúra típus
-             * - logicOpEnable: VK_FALSE = logikai műveletek kikapcsolva (bitwise operációk mint AND, OR)
-             * - logicOp: logikai művelet típusa (COPY = másolás, nincs hatása ha logicOpEnable=false)
-             * - attachmentCount: hány attachment-et használunk (1 = egy render target)
-             * - pAttachments: pointer az attachment konfigurációra
-             * - blendConstants: globális keverési konstansok (RGBA, mindegyik 0.0)
-             */
-            VkPipelineColorBlendStateCreateInfo colorBlending{};
-            colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-            colorBlending.logicOpEnable = VK_FALSE;
-            colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-            colorBlending.attachmentCount = 1;
-            colorBlending.pAttachments = &colorBlendAttachment;
-            colorBlending.blendConstants[0] = 0.0f; // Optional
-            colorBlending.blendConstants[1] = 0.0f; // Optional
-            colorBlending.blendConstants[2] = 0.0f; // Optional
-            colorBlending.blendConstants[3] = 0.0f; // Optional
+        /*
+         * Color blending globális konfiguráció (az összes framebuffer attachmentre vonatkozik)
+         * - sType: struktúra típus
+         * - logicOpEnable: VK_FALSE = logikai műveletek kikapcsolva (bitwise operációk mint AND, OR)
+         * - logicOp: logikai művelet típusa (COPY = másolás, nincs hatása ha logicOpEnable=false)
+         * - attachmentCount: hány attachment-et használunk (1 = egy render target)
+         * - pAttachments: pointer az attachment konfigurációra
+         * - blendConstants: globális keverési konstansok (RGBA, mindegyik 0.0)
+         */
+        VkPipelineColorBlendStateCreateInfo colorBlending{};
+        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        colorBlending.logicOpEnable = VK_FALSE;
+        colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
+        colorBlending.attachmentCount = 1;
+        colorBlending.pAttachments = &colorBlendAttachment;
+        colorBlending.blendConstants[0] = 0.0f; // Optional
+        colorBlending.blendConstants[1] = 0.0f; // Optional
+        colorBlending.blendConstants[2] = 0.0f; // Optional
+        colorBlending.blendConstants[3] = 0.0f; // Optional
 
         /*
          * Pipeline layout konfiguráció
@@ -984,17 +1001,46 @@ private:
          * Pipeline layout létrehozása
          * Ha sikertelen, runtime_error kivételt dob
          */
-        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
+        {
             throw std::runtime_error("failed to create pipeline layout!");
         }
 
+        /**
+         * Ez a rész a grafikus pipeline létrehozásához szükséges összes beállítást tartalmazza.
+         * Meghatározza, hogyan dolgozzák fel a vertex adatokat, milyen shader szakaszokat használunk,
+         * és hogyan történik a rajzolás a render pass-on belül.
+         */
+
+        VkGraphicsPipelineCreateInfo pipelineInfo{};                          // A grafikus pipeline létrehozásához használt fő struktúra
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO; // Megadja, hogy ez egy grafikus pipeline leíró struktúra
+        pipelineInfo.stageCount = 2;                                          // Két shader szakasz van: vertex és fragment
+        pipelineInfo.pStages = shaderStages;                                  // Mutató a shader szakaszokat leíró tömbre (vertex + fragment shader)
+        pipelineInfo.pVertexInputState = &vertexInputInfo;                    // A vertex adatokat leíró beállítások (formátum, stride stb.)
+        pipelineInfo.pInputAssemblyState = &inputAssembly;                    // A primitív típus (háromszög, vonal, pont) és rajzolási mód beállítása
+        pipelineInfo.pViewportState = &viewportState;                         // A viewport (kirajzolási terület) és scissor rect beállításai
+        pipelineInfo.pRasterizationState = &rasterizer;                       // A raszterizáló beállításai (kitöltés, culling, front face)
+        pipelineInfo.pMultisampleState = &multisampling;                      // Multisampling (élsimítás) beállításai
+        pipelineInfo.pDepthStencilState = nullptr;                            // (Opcionális) Mélység- és stencil-teszt kikapcsolva ennél az egyszerű példánál
+        pipelineInfo.pColorBlendState = &colorBlending;                       // Színkeverés (color blending) beállításai, pl. átlátszóság kezelése
+        pipelineInfo.pDynamicState = &dynamicState;                           // Dinamikusan változtatható beállítások (pl. viewport méret futás közben)
+        pipelineInfo.layout = pipelineLayout;                                 // Pipeline layout, ami meghatározza a shaderek erőforrásait (uniformok, descriptor setek)
+        pipelineInfo.renderPass = renderPass;                                 // A render pass, amelyhez ez a pipeline tartozik
+        pipelineInfo.subpass = 0;                                             // A render pass első (0. indexű) subpass-ához kapcsolódik
+        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;                     // (Opcionális) Nincs másik pipeline, amiből örökölne
+        pipelineInfo.basePipelineIndex = -1;                                  // (Opcionális) Nincs pipeline index örökléshez
+
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) !=
+            VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create graphics pipeline!");
+        }
 
 
-            vkDestroyShaderModule(device, fragShaderModule, nullptr);
-            // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
-            vkDestroyShaderModule(device, vertShaderModule, nullptr);
-            // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
-
+        vkDestroyShaderModule(device, fragShaderModule, nullptr);
+        // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
+        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
     }
 
 
@@ -1129,8 +1175,11 @@ private:
 
     void cleanup()
     {
-        //felszabadítja a pipeline layoutot
+        vkDestroyPipeline(device, graphicsPipeline, nullptr);
+        //felszabadítja a render passt és a pipeline t
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        vkDestroyRenderPass(device, renderPass, nullptr);
+
         //felszabadítja az imagevieweket
         for (auto imageView : swapChainImageViews)
         {
