@@ -1346,6 +1346,19 @@ private:
             throw std::runtime_error("failed to submit draw command buffer!"); // Hiba dobása, ha a benyújtás nem sikerült
         }
 
+        VkPresentInfoKHR presentInfo{}; // Létrehozunk egy struktúrát a prezentációs információkhoz
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR; // Meghatározzuk a struktúra típusát
+        presentInfo.waitSemaphoreCount = 1; // Megadjuk, hány semaphore-ra várjon a GPU, mielőtt prezentál
+        presentInfo.pWaitSemaphores = signalSemaphores; // A semaphore, ami jelzi, hogy a renderelés befejeződött és lehet prezentálni
+
+        VkSwapchainKHR swapChains[] = {swapChain}; // Megadjuk a swap chain-eket, amelyekből az image-eket prezentálni fogjuk
+        presentInfo.swapchainCount = 1; // A swap chain-ek száma, itt csak egy van
+        presentInfo.pSwapchains = swapChains; // Pointer a swap chain tömbhöz
+        presentInfo.pImageIndices = &imageIndex; // A prezentálni kívánt kép indexe a swap chain-ben
+        presentInfo.pResults = nullptr; // Opcionális, visszaadja a prezentáció eredményét minden swap chain-re
+
+        vkQueuePresentKHR(presentQueue, &presentInfo); // Beküldjük a prezentációs parancsot a prezentációs queue-ra
+
     }
 
     void initWindow()
@@ -1366,6 +1379,7 @@ private:
             glfwPollEvents();
             drawFrame();
         }
+        vkDeviceWaitIdle(device);
 
     }
 
