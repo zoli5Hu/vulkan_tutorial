@@ -766,10 +766,6 @@ private:
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
         // Shader stage-ek tömbje a pipeline-nak
 
-        vkDestroyShaderModule(device, fragShaderModule, nullptr);
-        // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
-        vkDestroyShaderModule(device, vertShaderModule, nullptr);
-        // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
 
         // Dinamikus állapotok listája – olyan pipeline beállítások, amiket nem fix értékkel adunk meg, hanem futásidőben (draw time-ban) állítunk be
         vector<VkDynamicState> dynamicStates = {
@@ -786,27 +782,61 @@ private:
         // Pointer a dinamikus állapotok tömbjére (a vektor első elemének címe)
         dynamicState.pDynamicStates = dynamicStates.data();
 
-            // Vertex input state struktúra létrehozása (megadja, hogyan kell értelmezni a vertex adatokat)
-            VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-            // Beállítjuk a struktúra típusát
-            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-            // Hány vertex binding leírást használunk (0, mert most a shaderben hardcode-oljuk a pozíciókat)
-            vertexInputInfo.vertexBindingDescriptionCount = 0;
-            // Pointer a vertex binding leírásokra (nullptr, mert most nincs vertex buffer)
-            vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-            // Hány vertex attribútum leírást használunk (0, mert a shaderben adjuk meg a pozíciókat)
-            vertexInputInfo.vertexAttributeDescriptionCount = 0;
-            // Pointer a vertex attribútum leírásokra (nullptr, mert most nincs vertex buffer)
-            vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+        // Vertex input state struktúra létrehozása (megadja, hogyan kell értelmezni a vertex adatokat)
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        // Beállítjuk a struktúra típusát
+        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        // Hány vertex binding leírást használunk (0, mert most a shaderben hardcode-oljuk a pozíciókat)
+        vertexInputInfo.vertexBindingDescriptionCount = 0;
+        // Pointer a vertex binding leírásokra (nullptr, mert most nincs vertex buffer)
+        vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
+        // Hány vertex attribútum leírást használunk (0, mert a shaderben adjuk meg a pozíciókat)
+        vertexInputInfo.vertexAttributeDescriptionCount = 0;
+        // Pointer a vertex attribútum leírásokra (nullptr, mert most nincs vertex buffer)
+        vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
 
-            // Input assembly state struktúra létrehozása (megadja, hogyan kell összerakni a vertexeket primitívekké)
-            VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-            // Beállítjuk a struktúra típusát
-            inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-            // Milyen primitíveket rajzoljunk (TRIANGLE_LIST = minden 3 vertex egy háromszög, nem megosztottak)
-            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-            // Primitive restart engedélyezése (VK_FALSE = nem használjuk, csak strip/fan topológiánál hasznos)
-            inputAssembly.primitiveRestartEnable = VK_FALSE;
+        // Input assembly state struktúra létrehozása (megadja, hogyan kell összerakni a vertexeket primitívekké)
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+        // Beállítjuk a struktúra típusát
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        // Milyen primitíveket rajzoljunk (TRIANGLE_LIST = minden 3 vertex egy háromszög, nem megosztottak)
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        // Primitive restart engedélyezése (VK_FALSE = nem használjuk, csak strip/fan topológiánál hasznos)
+        inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+            /*
+             * Viewport konfiguráció - meghatározza a framebuffer mely részére rendereljünk
+             * - x, y: bal felső sarok pozíciója (0,0 = bal felső sarok)
+             * - width, height: viewport mérete pixelben (swap chain méretével egyezik)
+             * - minDepth, maxDepth: mélységi puffer tartomány (0.0-1.0 a Vulkan szabvány)
+             * A viewport átalakítja a normalized device coordinates (-1 és +1 között) értékeket képernyő koordinátákká
+             */
+            VkViewport viewport{};
+            viewport.x = 0.0f;
+            viewport.y = 0.0f;
+            viewport.width = (float)swapChainExtent.width;
+            viewport.height = (float)swapChainExtent.height;
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+
+            /*
+             * Scissor konfiguráció - vágási téglalap amely korlátozza hova lehet rajzolni
+             * - offset: eltolás pixelben {0, 0} = bal felső sarok, nincs eltolás
+             * - extent: scissor mérete (teljes swap chain méret = egész képernyőre rajzolunk)
+             * Minden ami a scissor téglapaon kívül esik, eldobásra kerül
+             */
+            VkRect2D scissor{};
+            scissor.offset = {0, 0};
+            scissor.extent = swapChainExtent;
+
+
+        vkDestroyShaderModule(device, fragShaderModule, nullptr);
+        // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
+        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
+
+
+
     }
 
 
