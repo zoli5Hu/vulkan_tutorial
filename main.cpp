@@ -1103,14 +1103,28 @@ private:
     }
 
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0; // Optional
-        beginInfo.pInheritanceInfo = nullptr; // Optional
+        VkCommandBufferBeginInfo beginInfo{}; // Struktúra létrehozása a command buffer rögzítésének beállításaihoz
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO; // Vulkan struktúra típusa
+        beginInfo.flags = 0; // Nincsenek speciális használati flag-ek (opcionális)
+        beginInfo.pInheritanceInfo = nullptr; // Csak secondary buffer-eknél releváns, itt nem használjuk (opcionális)
 
-        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("failed to begin recording command buffer!");
+        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) { // Megkezdjük a command buffer rögzítését
+            throw std::runtime_error("failed to begin recording command buffer!"); // Hibakezelés, ha nem sikerül
         }
+
+        VkRenderPassBeginInfo renderPassInfo{}; // Struktúra létrehozása a render pass indításához
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO; // Vulkan struktúra típusa
+        renderPassInfo.renderPass = renderPass; // Melyik render passt fogjuk használni
+        renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex]; // Melyik framebuffer-hez kötjük a render passt
+        renderPassInfo.renderArea.offset = {0, 0}; // Render terület bal felső sarka
+        renderPassInfo.renderArea.extent = swapChainExtent; // Render terület mérete (szélesség × magasság)
+        VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}}; // Clear érték definiálása: fekete, 100% átlátszatlanság
+        renderPassInfo.clearValueCount = 1; // Egy attachment-et tisztítunk
+        renderPassInfo.pClearValues = &clearColor; // Pointer a clear értékhez
+
+        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        // A render pass elindítása a command buffer-ben
+        // VK_SUBPASS_CONTENTS_INLINE: a render pass parancsai közvetlenül a primary command buffer-be kerülnek
     }
 
 
