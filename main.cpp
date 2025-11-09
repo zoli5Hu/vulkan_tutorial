@@ -86,6 +86,8 @@ private:
 
     VkPipeline graphicsPipeline;
 
+    vector<VkFramebuffer> swapChainFramebuffers;
+
 
     //swapchan setup start extension enable
     const vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
@@ -667,6 +669,8 @@ private:
         createImageViews();
         createRenderPass();
         createGraphicsPipeline();
+        createFramebuffers();
+
     }
 
 
@@ -1043,6 +1047,30 @@ private:
         // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
     }
 
+    void createFramebuffers() { // Framebufferek létrehozása minden swap chain image-hez
+        swapChainFramebuffers.resize(swapChainImageViews.size()); // Lefoglaljuk a helyet a framebuffer objektumoknak
+
+        for (size_t i = 0; i < swapChainImageViews.size(); i++) { // Végigmegyünk az összes swap chain image-en
+            VkImageView attachments[] = { // Az aktuális framebufferhez tartozó attachmentek
+                swapChainImageViews[i] // Csak egy color attachment lesz, az adott swap chain image view
+            };
+
+            VkFramebufferCreateInfo framebufferInfo{}; // Létrehozási információ struktúra
+            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO; // Struktúra típusa
+            framebufferInfo.renderPass = renderPass; // A render pass, amihez a framebuffer tartozik
+            framebufferInfo.attachmentCount = 1; // Hány attachment tartozik a framebufferhez (itt 1)
+            framebufferInfo.pAttachments = attachments; // Pointer az attachmentekhez
+            framebufferInfo.width = swapChainExtent.width; // Framebuffer szélessége (swap chain mérete alapján)
+            framebufferInfo.height = swapChainExtent.height; // Framebuffer magassága
+            framebufferInfo.layers = 1; // Rétegek száma (általában 1, ha nem 3D vagy többrétegű render) ezt lehet majd késöbb állítani kell
+
+            if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) { // Vulkan hívás a framebuffer létrehozására
+                throw std::runtime_error("failed to create framebuffer!"); // Hibakezelés, ha nem sikerül
+            }
+        }
+    }
+
+
 
     // Létrehozza a swap chain-t, amely a képernyőre kerülő képek puffereit kezeli
     void createSwapChain()
@@ -1175,6 +1203,11 @@ private:
 
     void cleanup()
     {
+        //felszabadítja a framebufferket
+        for (auto framebuffer : swapChainFramebuffers) {
+            vkDestroyFramebuffer(device, framebuffer, nullptr);
+        }
+
         vkDestroyPipeline(device, graphicsPipeline, nullptr);
         //felszabadítja a render passt és a pipeline t
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
