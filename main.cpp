@@ -81,6 +81,8 @@ private:
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent;
 
+    VkPipelineLayout pipelineLayout;
+
     //swapchan setup start extension enable
     const vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
@@ -931,6 +933,32 @@ private:
             colorBlending.blendConstants[2] = 0.0f; // Optional
             colorBlending.blendConstants[3] = 0.0f; // Optional
 
+        /*
+         * Pipeline layout konfiguráció
+         * A pipeline layout meghatározza, milyen uniform bufferek, descriptor set-ek és push constantok
+         * érhetők el a shaderekben. Most egyiket sem használjuk, ezért minden 0/nullptr.
+         * - sType: struktúra típus
+         * - setLayoutCount: hány descriptor set layout-ot használunk (0 = nincs)
+         * - pSetLayouts: pointer a descriptor set layout-okra (nullptr = nincs)
+         * - pushConstantRangeCount: hány push constant range-t használunk (0 = nincs)
+         * - pPushConstantRanges: pointer a push constant range-ekre (nullptr = nincs)
+         * - muszáj implementálnunk még akkor is ha üres ez a cpu és shader között híd
+         */
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 0; // Optional
+        pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+        pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+        pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+        /*
+         * Pipeline layout létrehozása
+         * Ha sikertelen, runtime_error kivételt dob
+         */
+        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create pipeline layout!");
+        }
+
 
 
             vkDestroyShaderModule(device, fragShaderModule, nullptr);
@@ -1072,6 +1100,8 @@ private:
 
     void cleanup()
     {
+        //felszabadítja a pipeline layoutot
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         //felszabadítja az imagevieweket
         for (auto imageView : swapChainImageViews)
         {
