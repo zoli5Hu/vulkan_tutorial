@@ -1299,7 +1299,23 @@ private:
         // Reseteljük a fence-t, hogy újra használható legyen a következő frame rendereléséhez
 
         uint32_t imageIndex;
-        vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+        // Változó, amiben a lekért swap chain kép indexét tároljuk
+
+        vkAcquireNextImageKHR(
+            device,                 /**/ // A logikai Vulkan eszköz, amin dolgozunk
+            swapChain,              /**/ // A swap chain, amiből a következő képet kérjük
+            UINT64_MAX,             /**/ // Timeout nanosec-ban; UINT64_MAX = gyakorlatilag nincs timeout
+            imageAvailableSemaphore,/**/ // Semaphore, ami jelez, ha a kép már használható renderelésre
+            VK_NULL_HANDLE,         /**/ // Fence, ha CPU-nak is várnia kellene (itt nem használjuk)
+            &imageIndex             /**/ // Visszaadott index a swap chain képre, amit használhatunk
+        );
+        // Lekéri a következő elérhető képet a swap chain-ből, és jelez egy semaphore-on keresztül, hogy mikor kezdhetjük el rajzolni
+
+        vkResetCommandBuffer(commandBuffer, 0);
+        /**/ // Reseteljük a command buffer-t, hogy újra felhasználható legyen a következő frame-hez; minden korábbi parancs törlődik
+
+        recordCommandBuffer(commandBuffer, imageIndex);
+        /**/ // Feljegyezzük a parancsokat a command buffer-be az aktuális swap chain képhez (pl. pipeline bind, draw call)
     }
 
     void initWindow()
