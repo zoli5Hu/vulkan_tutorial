@@ -888,6 +888,8 @@ private:
         multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
         multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
+        //ha lenen stancilünk vagy depthünk itt kéne konfigurálni
+
 
             vkDestroyShaderModule(device, fragShaderModule, nullptr);
             // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
