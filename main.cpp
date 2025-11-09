@@ -91,7 +91,6 @@ private:
     vector<VkImageView> swapChainImageViews;
 
 
-
 #ifdef NDEBUG
     const bool enableValidationLayers = false;
 #else
@@ -664,9 +663,13 @@ private:
     }
 
 
-    void createImageViews() {
-        swapChainImageViews.resize(swapChainImages.size()); // Átméretezi a vektor tárolót, hogy minden swap chain képhez tartozzon egy image view
-        for (size_t i = 0; i < swapChainImages.size(); i++) { // Végigiterál minden swap chain képen
+    void createImageViews()
+    {
+        swapChainImageViews.resize(swapChainImages.size());
+        // Átméretezi a vektor tárolót, hogy minden swap chain képhez tartozzon egy image view
+        for (size_t i = 0; i < swapChainImages.size(); i++)
+        {
+            // Végigiterál minden swap chain képen
             VkImageViewCreateInfo createInfo{}; // Létrehozza az image view konfigurációs struktúrát
             createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; // Beállítja a struktúra típusát
             createInfo.image = swapChainImages[i]; // Megadja, melyik képhez tartozik ez az image view
@@ -676,32 +679,37 @@ private:
             createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY; // Zöld csatorna marad eredeti
             createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY; // Kék csatorna marad eredeti
             createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY; // Alfa csatorna marad eredeti
-            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Megadja, hogy színes képként kezeljük (nem depth/stencil)
-            createInfo.subresourceRange.baseMipLevel = 0; // A legmagasabb felbontású mipmap szintet használjuk (0 = teljes felbontás)
+            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            // Megadja, hogy színes képként kezeljük (nem depth/stencil)
+            createInfo.subresourceRange.baseMipLevel = 0;
+            // A legmagasabb felbontású mipmap szintet használjuk (0 = teljes felbontás)
             createInfo.subresourceRange.levelCount = 1; // Csak 1 mipmap szintet használunk (nincs mipmap lánc)
-            createInfo.subresourceRange.baseArrayLayer = 0; // Az első tömb rétegtől kezdjük (VR/stereo renderingnél van jelentősége)
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            // Az első tömb rétegtől kezdjük (VR/stereo renderingnél van jelentősége)
             createInfo.subresourceRange.layerCount = 1; // Csak 1 réteget használunk (nem VR, csak sima 2D kép)
 
-            if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
+            if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS)
+            {
                 throw runtime_error("failed to create image views!");
             }
         }
-
     }
 
 
     // Fájlt olvas be bájtokként és visszaadja egy vector<char>-ben
-    static vector<char> readFile(const string& filename) {
+    static vector<char> readFile(const string& filename)
+    {
         // Megnyitjuk a fájlt bináris módban, és a fájl végére állítjuk a read pointert
         //ios::ate végéről olvas be ez a tellg miatt csináljuk könnyeb ba mretét megadni
         //ios::binary binárisként kezeli a filet nincsbenne /n
         ifstream file(filename, ios::ate | ios::binary);
         // Ha nem sikerült megnyitni, dobunk egy kivételt
-        if (!file.is_open()) {
+        if (!file.is_open())
+        {
             throw runtime_error("failed to open file!");
         }
         // Lekérdezzük a fájl méretét a tellg() függvénnyel
-        size_t fileSize = (size_t) file.tellg();
+        size_t fileSize = (size_t)file.tellg();
         // Létrehozunk egy vector<char>-t, ami a fájl bájtjait fogja tárolni
         vector<char> buffer(fileSize);
         // Visszaállítjuk a read pointert a fájl elejére
@@ -714,7 +722,8 @@ private:
         return buffer;
     }
 
-    VkShaderModule createShaderModule(const vector<char>& code) {
+    VkShaderModule createShaderModule(const vector<char>& code)
+    {
         VkShaderModuleCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.codeSize = code.size();
@@ -723,21 +732,24 @@ private:
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
         VkShaderModule shaderModule;
-        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+        {
             throw std::runtime_error("failed to create shader module!");
         }
 
         return shaderModule;
-
     }
 
 
-    void createGraphicsPipeline() {
+    void createGraphicsPipeline()
+    {
         auto vertShaderCode = readFile("shaders/vert.spv"); // Beolvassa a vertex shader SPIR-V bytecode-ot
         auto fragShaderCode = readFile("shaders/frag.spv"); // Beolvassa a fragment shader SPIR-V bytecode-ot
 
-        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode); // Létrehozza a vertex shader modult a Vulkan számára
-        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode); // Létrehozza a fragment shader modult a Vulkan számára
+        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+        // Létrehozza a vertex shader modult a Vulkan számára
+        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+        // Létrehozza a fragment shader modult a Vulkan számára
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{}; // Vertex shader stage konfiguráció struktúra
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; // Struktúra típus megadása
@@ -751,12 +763,29 @@ private:
         fragShaderStageInfo.module = fragShaderModule; // A shader modul referenciája
         fragShaderStageInfo.pName = "main"; // A shader belépési pontja (main függvény)
 
-        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo}; // Shader stage-ek tömbje a pipeline-nak
+        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        // Shader stage-ek tömbje a pipeline-nak
 
-        vkDestroyShaderModule(device, fragShaderModule, nullptr); // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
-        vkDestroyShaderModule(device, vertShaderModule, nullptr); // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
+        vkDestroyShaderModule(device, fragShaderModule, nullptr);
+        // Felszabadítja a fragment shader modult (pipeline létrehozás után már nem kell)
+        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        // Felszabadítja a vertex shader modult (pipeline létrehozás után már nem kell)
+
+        // Dinamikus állapotok listája – olyan pipeline beállítások, amiket nem fix értékkel adunk meg, hanem futásidőben (draw time-ban) állítunk be
+        vector<VkDynamicState> dynamicStates = {
+            VK_DYNAMIC_STATE_VIEWPORT, // A viewport (látómező) mérete és pozíciója dinamikusan állítható lesz
+            VK_DYNAMIC_STATE_SCISSOR // A scissor (vágási terület) mérete és pozíciója dinamikusan állítható lesz
+        };
+
+        // Létrehozunk egy üres struktúrát a dinamikus állapotok konfigurálásához (minden mező 0/nullptr lesz)
+        VkPipelineDynamicStateCreateInfo dynamicState{};
+        // Beállítjuk a struktúra típusát, hogy a Vulkan tudja mit kap paraméterként
+        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        // Megadjuk hány dinamikus állapotot akarunk használni (a vektor mérete, size_t-ről uint32_t-re castolva)
+        dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+        // Pointer a dinamikus állapotok tömbjére (a vektor első elemének címe)
+        dynamicState.pDynamicStates = dynamicStates.data();
     }
-
 
 
     // Létrehozza a swap chain-t, amely a képernyőre kerülő képek puffereit kezeli
@@ -858,13 +887,15 @@ private:
             throw runtime_error("failed to create swap chain!");
         }
 
-        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr); // Lekérdezi a swap chain-ben lévő képek számát
+        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+        // Lekérdezi a swap chain-ben lévő képek számát
         swapChainImages.resize(imageCount); // Átméretezi a vektort a képek számára
-        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data()); // Betölti a swap chain képeket a vektorba
+        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+        // Betölti a swap chain képeket a vektorba
 
         swapChainImageFormat = surfaceFormat.format; // Elmenti a választott színformátumot későbbi használatra
         swapChainExtent = extent; // Elmenti a swap chain felbontását későbbi használatra
-        }
+    }
 
     void initWindow()
     {
@@ -889,7 +920,8 @@ private:
     void cleanup()
     {
         //felszabadítja az imagevieweket
-        for (auto imageView : swapChainImageViews) {
+        for (auto imageView : swapChainImageViews)
+        {
             vkDestroyImageView(device, imageView, nullptr);
         }
         //felszabadítja a swapchaint
