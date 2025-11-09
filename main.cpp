@@ -1125,6 +1125,38 @@ private:
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         // A render pass elindítása a command buffer-ben
         // VK_SUBPASS_CONTENTS_INLINE: a render pass parancsai közvetlenül a primary command buffer-be kerülnek
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+        // A graphics pipeline-t kötjük a command buffer-hez, így a draw call-ok ezt a pipeline-t használják
+
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(swapChainExtent.width);
+        viewport.height = static_cast<float>(swapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        // Beállítjuk a viewport-ot, azaz a render területet, ahová a normalized device coordinates vetülnek
+
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+        // Beállítjuk a scissor-t, ami meghatározza, mely pixelekre írhat a GPU a renderelés során
+
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        // Kirajzoljuk a háromszöget: 3 vertex, 1 példány, offsetek 0
+
+        vkCmdEndRenderPass(commandBuffer);
+        // Befejezzük a render passt, minden draw call ebben a render pass-ban lezárul
+
+        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("failed to record command buffer!");
+        }
+        // Befejezzük a command buffer rögzítését, készen áll a GPU-ra való submit-re
+
+
     }
 
 
