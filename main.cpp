@@ -797,6 +797,16 @@ private:
             throw std::runtime_error("failed to create render pass!");
         }
 
+        VkSubpassDependency dependency{}; // Létrehozunk egy subpass dependency objektumot a render pass szinkronizációjához
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL; // A forrás subpass a render pass előtti implicit "külső" subpass
+        dependency.dstSubpass = 0; // A cél subpass a mi első (és egyetlen) subpass-unk, index 0
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // A forrás oldalon melyik pipeline stage-re várunk (color attachment output stage)
+        dependency.srcAccessMask = 0; // Forrás hozzáférés nincs explicit memória hozzáférés, csak a stage-re várunk
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // A cél pipeline stage, ahol a függő művelet történik (color attachment output stage)
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // A cél oldalon írni fogunk a color attachment-be, ez határozza meg a memóriahozzáférést
+        renderPassInfo.dependencyCount = 1; // A render pass-ban egy dependency-t használunk
+        renderPassInfo.pDependencies = &dependency; // A dependency-t megadjuk a render pass létrehozásakor
+
 
 
     }
