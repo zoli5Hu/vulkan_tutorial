@@ -43,8 +43,7 @@ void VulkanRenderer::cleanup() {
 // --- Fő Rajzoló Függvény ---
 
 // Ez a függvény veszi át a 'drawFrame' teljes logikáját a main.cpp-ből
-void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipeline) {
-
+void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipeline, VkBuffer vertexBuffer) {
     // 1. VÁRAKOZÁS A FENCE-RE (CPU oldali várakozás)
     // Várunk, amíg a GPU befejezi azt a képkockát, ami az 'inFlightFences[currentFrame]'
     // szinkronizációs készletet használta.
@@ -80,15 +79,21 @@ void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipel
     // Reseteljük az aktuális 'frame-in-flight'-hez tartozó parancspuffert
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
     // Újrarögzítjük a parancsokat (háromszög rajzolása)
-    recordCommandBuffer(commandBuffers[currentFrame], imageIndex, swapchain, pipeline);
-
+    recordCommandBuffer(commandBuffers[currentFrame], imageIndex, swapchain, pipeline, vertexBuffer);
     // 4. PARANCS BEKÜLDÉSE (SUBMIT) A GPU-NAK
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
     // Megmondjuk, melyik szemaforra VÁRJON, mielőtt elkezdi a rajzolást
     VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+
+    // MÓDOSÍTVA: A Vertex Input (buffer olvasás) szakaszra is várjon
+    // Ez a legjobb gyakorlat, ha a draw parancs előtt bindolunk vertex buffert.
+    VkPipelineStageFlags waitStages[] = {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+        VK_PIPELINE_STAGE_VERTEX_INPUT_BIT
+    };
+
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
@@ -177,8 +182,7 @@ void VulkanRenderer::createSyncObjects(VulkanSwapchain* swapchain)
 }
 
 // ÁTHELYEZVE: A parancsok rögzítése
-void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, VulkanSwapchain* swapchain, VulkanPipeline* pipeline) {
-    VkCommandBufferBeginInfo beginInfo{};
+void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, VulkanSwapchain* swapchain, VulkanPipeline* pipeline, VkBuffer vertexBuffer) {    VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
@@ -187,15 +191,21 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
     VkExtent2D extent = swapchain->getExtent();
 
+    // 1. Definiáljuk a törlési értékeket (Color és Depth)
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}}; // Szín: Fekete
+    clearValues[1].depthStencil = {1.0f, 0}; // Mélység: 1.0 (a legtávolabbi)
+
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = pipeline->getRenderPass();
     renderPassInfo.framebuffer = pipeline->getFramebuffer(imageIndex);
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = extent;
-    VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearColor;
+
+    // Frissítve: most már 2 törlési értéket adunk át
+    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -207,8 +217,25 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    // 2. Mátrix létrehozása (Model-View-Projection)
-    glm::mat4 mvp = glm::mat4(1.0f); // Kezdetben egységmátrix
+    // Projection (Vetorítés)
+    const float aspectRatio = (float)extent.width / (float)extent.height;
+    // 45 fokos látószög, arány, 0.1-100.0 mélység
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
+
+    // View (Kamera)
+    glm::vec3 cameraPos = glm::vec3(2.0f, 2.0f, -4.0f); // A kamera pozíciója (a kocka előtt és felett)
+    glm::vec3 center = glm::vec3(0.0f, 0.0f, 0.0f); // Hová néz a kamera
+    glm::vec3 up = glm::vec3(0.0f, -1.0f, 0.0f); // Melyik irány a "felfelé" (OpenGL-hez képest Vulkanban fordítva van a Y, ezért használjuk a -1.0-t, ahogy a tanár is tenné)
+    glm::mat4 view = glm::lookAt(cameraPos, center, up);
+
+    // Model (Forgatás)
+    glm::mat4 model = glm::mat4(1.0f);
+    // X, Y és Z tengely körüli forgatás az idővel
+    model = glm::rotate(model, time * glm::radians(20.0f), glm::vec3(1.0f, 0.0f, 0.0f)); // X tengely
+    model = glm::rotate(model, time * glm::radians(40.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // Y tengely
+
+    // MVP = Projection * View * Model
+    glm::mat4 mvp = projection * view * model;
 
     // Forgatás a Z tengely körül (az óramutató járásával megegyezően)
     // 90 fokot tesz meg másodpercenként (glm::radians(90.0f))
@@ -223,6 +250,12 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
         sizeof(mvp),                    // méret (egy mat4)
         &mvp                            // pointer az adatra (a mátrixra)
     );
+
+    // --- ÚJ: VERTEX BUFFER KÖTÉSE ---
+    VkBuffer vertexBuffers[] = {vertexBuffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -238,8 +271,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
     // Rajzoljuk a hard-coded háromszöget
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-
+    vkCmdDraw(commandBuffer, cubeVertexCount, 1, 0, 0);
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

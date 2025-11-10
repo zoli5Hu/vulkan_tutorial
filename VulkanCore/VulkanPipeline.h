@@ -11,7 +11,8 @@ public:
     ~VulkanPipeline();
 
     // Fő inicializáló és törlő metódusok
-    void create(VulkanContext* context, VulkanSwapchain* swapchain);
+    // MÓDOSÍTVA: Átadjuk a depth buffer adatait
+    void create(VulkanContext* context, VulkanSwapchain* swapchain, VkImageView depthImageView, VkFormat depthFormat);
     void cleanup();
 
     // Get-terek (ezeket fogja használni a main.cpp a rajzoláshoz)
@@ -33,13 +34,15 @@ private:
     // --- Privát segédfüggvények (áthelyezve a main.cpp-ből) ---
 
     // Létrehozza a Render Pass-t
-    void createRenderPass(VkFormat swapchainFormat);
+    // MÓDOSÍTVA: Megkapja a depth formátumot
+    void createRenderPass(VkFormat swapchainFormat, VkFormat depthFormat);
 
     // Létrehozza a teljes grafikus pipeline-t (shaderekkel, beállításokkal)
     void createGraphicsPipeline();
 
     // Létrehozza a framebuffer-eket a swapchain image view-jaihoz
-    void createFramebuffers(VulkanSwapchain* swapchain);
+    // MÓDOSÍTVA: Megkapja a depth view-t
+    void createFramebuffers(VulkanSwapchain* swapchain, VkImageView depthImageView);
 
     // Beolvas egy fájlt (pl. shader) binárisan
     static std::vector<char> readFile(const std::string& filename);

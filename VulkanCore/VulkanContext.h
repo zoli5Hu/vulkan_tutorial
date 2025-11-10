@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm> // clamp-hoz
+#include <functional>
 #include <limits>    // numeric_limits-hez
 
 struct QueueFamilyIndices
@@ -67,6 +68,23 @@ public:
     // Lekérdezi a fizikai eszköz swap chain támogatási adatait
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice dev, VkSurfaceKHR surf);
 
+    // Megkeresi a megfelelő memória típust (pl. "GPU-lokális" vagy "CPU-látható")
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+    // Létrehoz egy buffert (pl. Vertex Buffer) és memóriát allokál neki
+    void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+
+    // Létrehoz egy képet (pl. Depth Buffer)
+    void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+
+    // Létrehoz egy képnézetet (ImageView) egy képhez
+    VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+
+    // Egy parancsot azonnal elküld a GPU-nak (pl. másoláshoz)
+    void executeSingleTimeCommands(std::function<void(VkCommandBuffer)> commandFunction);
+
+    // Átmásol egy buffert egy másikba
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 private:
     // Vulkan "mag" objektumok
     VkInstance instance;

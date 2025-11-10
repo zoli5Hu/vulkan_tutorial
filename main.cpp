@@ -4,16 +4,26 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
+#include <vector> // ÚJ: a vertex adatokhoz
+#include <cstring> // ÚJ: a memcpy-hez
 
 // 1. BEILLESZTJÜK AZ ÖSSZES OSZTÁLYUNKAT
 #include "VulkanCore/VulkanContext.h"
 #include "VulkanCore/VulkanSwapchain.h"
 #include "VulkanCore/VulkanPipeline.h"
-#include "VulkanCore/VulkanRenderer.h" // <-- ÚJ
+#include "VulkanCore/VulkanRenderer.h"
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 using namespace std;
+
+// A kocka adatai a fájlból (36 csúcspont)
+//
+static constexpr float g_cubeVertices[] = {
+    #include "./Modells/Datas/torus.inc"
+
+};
+
 
 class HelloTriangleApplication
 {
@@ -30,57 +40,131 @@ private:
     GLFWwindow* window;
 
     // --- Core Komponensek ---
-    // A motorunk most már 4 fő részből áll:
     VulkanContext vulkanContext;
     VulkanSwapchain vulkanSwapchain;
     VulkanPipeline vulkanPipeline;
-    VulkanRenderer vulkanRenderer; // <-- ÚJ OBJEKTUM
+    VulkanRenderer vulkanRenderer;
 
     // --- Alkalmazás-specifikus objektumok (MARADNAK) ---
-    // A Surface az egyetlen Vulkan objektum, ami az alkalmazáshoz
-    // (az ablakhoz) kötődik, nem a motor belső működéséhez.
     VkSurfaceKHR surface;
 
-    // TÖRÖLVE: commandBuffers, Szinkronizációs objektumok (semaphores, fences)
-    // Ezek mind átkerültek a VulkanRenderer-be.
+    // --- ÚJ: 3D Erőforrások ---
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexBufferMemory;
+
+    VkImage depthImage;
+    VkDeviceMemory depthImageMemory;
+    VkImageView depthImageView;
+    VkFormat depthFormat;
+
+    // --- ÚJ segédfüggvények ---
+
+    // Létrehozza a Vertex Buffert (a kocka adataival)
+    void createVertexBuffer() {
+        VkDeviceSize bufferSize = sizeof(g_cubeVertices);
+
+        // 1. Staging Buffer (CPU oldali) létrehozása
+        VkBuffer stagingBuffer;
+        VkDeviceMemory stagingBufferMemory;
+        vulkanContext.createBuffer(
+            bufferSize,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, // Forrás
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            stagingBuffer,
+            stagingBufferMemory
+        );
+
+        // 2. Adatok másolása a Staging Bufferbe
+        void* data;
+        vkMapMemory(vulkanContext.getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
+        memcpy(data, g_cubeVertices, (size_t)bufferSize);
+        vkUnmapMemory(vulkanContext.getDevice(), stagingBufferMemory);
+
+        // 3. Vertex Buffer (GPU oldali) létrehozása
+        vulkanContext.createBuffer(
+            bufferSize,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, // Cél és Vertex Buffer
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, // Csak a GPU látja
+            vertexBuffer,
+            vertexBufferMemory
+        );
+
+        // 4. Adatok átmásolása (Staging -> Vertex Buffer) a GPU-n
+        vulkanContext.copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+        // 5. Staging Buffer törlése
+        vkDestroyBuffer(vulkanContext.getDevice(), stagingBuffer, nullptr);
+        vkFreeMemory(vulkanContext.getDevice(), stagingBufferMemory, nullptr);
+    }
+
+    // Létrehozza a Depth Buffert (mélységi kép)
+    void createDepthResources() {
+        depthFormat = VK_FORMAT_D32_SFLOAT; // Standard mélység formátum
+        VkExtent2D swapChainExtent = vulkanSwapchain.getExtent();
+
+        // 1. Kép létrehozása
+        vulkanContext.createImage(
+            swapChainExtent.width,
+            swapChainExtent.height,
+            depthFormat,
+            VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // Mélységi pufferként használjuk
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            depthImage,
+            depthImageMemory
+        );
+
+        // 2. Képnézet (ImageView) létrehozása
+        depthImageView = vulkanContext.createImageView(
+            depthImage,
+            depthFormat,
+            VK_IMAGE_ASPECT_DEPTH_BIT // Mélységi képként kezeljük
+        );
+
+        // (Megjegyzés: Itt még kellene egy layout transition,
+        // de a RenderPass-unk kezeli az 'UNDEFINED' layout-ot)
+    }
 
     void initVulkan()
     {
-        // 1. LÉPÉS: Instance és Debugger létrehozása
-        // (A régi "vulkanContext.initVulkan(window);" helyett)
+        // 1. Instance
         vulkanContext.initInstance(window);
 
-        // 2. LÉPÉS: LÉTREHOZZUK A SURFACE-T
-        // (Ez már korábban is itt volt, és ez a helyes)
+        // 2. Surface
         if (glfwCreateWindowSurface(vulkanContext.getInstance(), window, nullptr, &surface) != VK_SUCCESS)
         {
             throw runtime_error("failed to create window surface!");
         }
 
-        // 3. LÉPÉS: Eszköz és CommandPool létrehozása (a surface átadásával)
+        // 3. Device
         vulkanContext.initDevice(surface);
 
-        // 4. LÉPÉS: LÉTREHOZZUK A SWAPCHAIN-T
+        // 4. Swapchain
         vulkanSwapchain.create(&vulkanContext, surface, window);
 
-        // 5. LÉPÉS: LÉTREHOZZUK A PIPELINE-T
-        vulkanPipeline.create(&vulkanContext, &vulkanSwapchain);
+        // --- MÓDOSÍTOTT SORREND ---
 
-        // 6. LÉPÉS: LÉTREHOZZUK A RENDERELŐT
-        // (Fontos: Ennek a create() hívásnak a createSyncObjects() miatt
-        // a swapchain->getImageCount() hívás előtt kell lennie)
+        // 5. ÚJ: Depth Buffer létrehozása (a pipeline-nak kell)
+        createDepthResources();
+
+        // 6. ÚJ: Vertex Buffer létrehozása (a renderelőnek kell)
+        createVertexBuffer();
+
+        // 7. MÓDOSÍTOTT: Pipeline létrehozása
+        // Átadjuk az új mélységi adatokat, amiket a pipeline elvár
+        vulkanPipeline.create(&vulkanContext, &vulkanSwapchain, depthImageView, depthFormat);
+
+        // 8. Renderer létrehozása
         vulkanRenderer.create(&vulkanContext, &vulkanSwapchain);
     }
 
-    // TÖRÖLVE: createCommandBuffer, recordCommandBuffer, createSyncObjects, drawFrame
-    // Ezek mind átkerültek a VulkanRenderer-be.
 
     void initWindow()
     {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan Kocka", nullptr, nullptr);
     }
 
     void mainLoop()
@@ -89,8 +173,9 @@ private:
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
 
-            // JAVÍTVA: A drawFrame hívás átkerült a renderer-be
-            vulkanRenderer.drawFrame(&vulkanSwapchain, &vulkanPipeline);
+            // MÓDOSÍTVA: Átadjuk a vertex buffert a renderelőnek
+            // EZ HIBA LESZ, amíg a VulkanRenderer-t nem frissítjük!
+            vulkanRenderer.drawFrame(&vulkanSwapchain, &vulkanPipeline, vertexBuffer);
         }
 
         // Várjuk meg, amíg a GPU befejezi az utolsó munkát is
@@ -99,27 +184,24 @@ private:
 
     void cleanup()
     {
-        // 1. ÚJ: A VulkanRenderer takarítása
-        // (ez törli: Semaphores, Fences)
-        // (A CommandBuffer-eket a CommandPool törlése kezeli)
+        // A létrehozással ellentétes sorrendben takarítunk
+
         vulkanRenderer.cleanup();
-
-        // 2. A VulkanPipeline takarítása
-        // (ez törli: Framebuffer, Pipeline, Layout, RenderPass)
         vulkanPipeline.cleanup();
-
-        // 3. A VulkanSwapchain takarítása
-        // (ez törli: Swapchain, ImageViews)
         vulkanSwapchain.cleanup();
 
-        // 4. FONTOS: A Surface törlése
-        vkDestroySurfaceKHR(vulkanContext.getInstance(), surface, nullptr);
+        // --- ÚJ: Erőforrások törlése ---
+        vkDestroyImageView(vulkanContext.getDevice(), depthImageView, nullptr);
+        vkDestroyImage(vulkanContext.getDevice(), depthImage, nullptr);
+        vkFreeMemory(vulkanContext.getDevice(), depthImageMemory, nullptr);
 
-        // 5. A VÉGÉN hívjuk meg a Context saját takarítóját
-        // (ez törli: Instance, Device, CommandPool, Debugger)
+        vkDestroyBuffer(vulkanContext.getDevice(), vertexBuffer, nullptr);
+        vkFreeMemory(vulkanContext.getDevice(), vertexBufferMemory, nullptr);
+        // --- ---
+
+        vkDestroySurfaceKHR(vulkanContext.getInstance(), surface, nullptr);
         vulkanContext.cleanup();
 
-        // 6. Végül a GLFW takarítása
         glfwDestroyWindow(window);
         glfwTerminate();
     }
