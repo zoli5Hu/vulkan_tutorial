@@ -67,6 +67,8 @@ add_executable(foobar
         VulkanCore/VulkanSwapchain.h
         VulkanCore/VulkanPipeline.cpp
         VulkanCore/VulkanPipeline.h
+        VulkanCore/VulkanRenderer.cpp
+        VulkanCore/VulkanRenderer.h
 )
 # 4. Hozzáadjuk a függőséget.
 add_dependencies(foobar CompileShaders)
