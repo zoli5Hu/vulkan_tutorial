@@ -1,6 +1,6 @@
 // VulkanCore/VulkanPipeline.cpp
 #include "VulkanPipeline.h"
-
+#include <glm/glm.hpp> // <-- ÚJ
 using namespace std;
 
 VulkanPipeline::VulkanPipeline() : context(nullptr), renderPass(VK_NULL_HANDLE),
@@ -157,10 +157,19 @@ void VulkanPipeline::createGraphicsPipeline()
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // A vertex shader fogja használni
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(glm::mat4); // Egy 4x4-es mátrix mérete
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pSetLayouts = nullptr; // Jó gyakorlat beállítani
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+
 
     if (vkCreatePipelineLayout(context->getDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
     {
@@ -185,11 +194,14 @@ void VulkanPipeline::createGraphicsPipeline()
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
 
+
     if (vkCreateGraphicsPipelines(context->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) !=
         VK_SUCCESS)
     {
         throw std::runtime_error("failed to create graphics pipeline!");
     }
+
+
 
     // A shaderekre már nincs szükség a pipeline létrehozása után
     vkDestroyShaderModule(context->getDevice(), fragShaderModule, nullptr);

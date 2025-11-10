@@ -2,6 +2,11 @@
 #include "VulkanRenderer.h"
 #include <stdexcept> // A std::runtime_error használatához
 
+#define GLM_FORCE_RADIANS // Fontos a Vulkan-kompatibilis forgatáshoz
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp> // a glm::rotate-hoz
+#include <chrono> // az időalapú forgáshoz
+
 using namespace std;
 
 VulkanRenderer::VulkanRenderer() : context(nullptr), currentFrame(0) {
@@ -196,6 +201,28 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getGraphicsPipeline());
 
+    // 1. Időalapú forgás kiszámítása
+    //    (A static biztosítja, hogy a startTime csak egyszer inicializálódjon)
+    static auto startTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    // 2. Mátrix létrehozása (Model-View-Projection)
+    glm::mat4 mvp = glm::mat4(1.0f); // Kezdetben egységmátrix
+
+    // Forgatás a Z tengely körül (az óramutató járásával megegyezően)
+    // 90 fokot tesz meg másodpercenként (glm::radians(90.0f))
+    mvp = glm::rotate(mvp, time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    // 3. Mátrix "pusholása" a shaderbe
+    vkCmdPushConstants(
+        commandBuffer,
+        pipeline->getPipelineLayout(),  // A pipeline layout, amit az előbb módosítottunk
+        VK_SHADER_STAGE_VERTEX_BIT,     // A vertex shadernek küldjük
+        0,                              // offset
+        sizeof(mvp),                    // méret (egy mat4)
+        &mvp                            // pointer az adatra (a mátrixra)
+    );
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
