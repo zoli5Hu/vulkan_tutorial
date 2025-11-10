@@ -4,8 +4,17 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
-#include <vector> // ÚJ: a vertex adatokhoz
-#include <cstring> // ÚJ: a memcpy-hez
+#include <vector>
+#include <cstring>
+#include <map>
+#include <chrono> // <- IDŐMÉRÉSHEZ
+#include <cmath> // A math.h függvényekhez
+
+// GLM include-ok
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/constants.hpp>
 
 // 1. BEILLESZTJÜK AZ ÖSSZES OSZTÁLYUNKAT
 #include "VulkanCore/VulkanContext.h"
@@ -17,11 +26,9 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 using namespace std;
 
-// A kocka adatai a fájlból (36 csúcspont)
-//
+// A torus adatai
 static constexpr float g_cubeVertices[] = {
     #include "./Modells/Datas/torus.inc"
-
 };
 
 
@@ -31,6 +38,10 @@ public:
     void run()
     {
         initWindow();
+        // 2. Callback regisztrálása a window objektummal (ez a 'this')
+        glfwSetWindowUserPointer(window, this);
+        glfwSetKeyCallback(window, staticKeyCallback);
+
         initVulkan();
         mainLoop();
         cleanup();
@@ -45,159 +56,207 @@ private:
     VulkanPipeline vulkanPipeline;
     VulkanRenderer vulkanRenderer;
 
-    // --- Alkalmazás-specifikus objektumok (MARADNAK) ---
+    // --- Kamera Állapot ---
+    // A kamera pozíciója a (0,0,0) pontra néz
+    glm::vec3 cameraPosition = glm::vec3(2.0f, 2.0f, -4.0f);
+    // Visszaállítjuk a sebességet, hogy a deltaTime-mal sima mozgást adjon
+    const float cameraSpeed = 1.5f; // Pl. 1.5 méter/másodperc
+
+    // --- Input Állapot ---
+    std::map<int, bool> keysPressed;
+
+    // --- Alkalmazás-specifikus objektumok ---
     VkSurfaceKHR surface;
 
-    // --- ÚJ: 3D Erőforrások ---
+    // --- 3D Erőforrások ---
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
-
     VkImage depthImage;
     VkDeviceMemory depthImageMemory;
     VkImageView depthImageView;
     VkFormat depthFormat;
 
-    // --- ÚJ segédfüggvények ---
+    // --- Static Callback a GLFW-hez (a C++ osztályon BELÜL) ---
+    static void staticKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+        void* userPtr = glfwGetWindowUserPointer(window);
+        if (userPtr) {
+            HelloTriangleApplication* app = reinterpret_cast<HelloTriangleApplication*>(userPtr);
 
-    // Létrehozza a Vertex Buffert (a kocka adataival)
+            if (action == GLFW_PRESS) {
+                app->keysPressed[key] = true;
+            } else if (action == GLFW_RELEASE) {
+                app->keysPressed[key] = false;
+            }
+
+            if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            }
+        }
+    }
+
+
+    // --- Core segédfüggvények ---
+
     void createVertexBuffer() {
         VkDeviceSize bufferSize = sizeof(g_cubeVertices);
 
-        // 1. Staging Buffer (CPU oldali) létrehozása
+        // A többi Vulkan kód a VulkanContext.cpp-ben van.
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
         vulkanContext.createBuffer(
             bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, // Forrás
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             stagingBuffer,
             stagingBufferMemory
         );
 
-        // 2. Adatok másolása a Staging Bufferbe
         void* data;
         vkMapMemory(vulkanContext.getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
         memcpy(data, g_cubeVertices, (size_t)bufferSize);
         vkUnmapMemory(vulkanContext.getDevice(), stagingBufferMemory);
 
-        // 3. Vertex Buffer (GPU oldali) létrehozása
         vulkanContext.createBuffer(
             bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, // Cél és Vertex Buffer
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, // Csak a GPU látja
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             vertexBuffer,
             vertexBufferMemory
         );
-
-        // 4. Adatok átmásolása (Staging -> Vertex Buffer) a GPU-n
         vulkanContext.copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
-
-        // 5. Staging Buffer törlése
         vkDestroyBuffer(vulkanContext.getDevice(), stagingBuffer, nullptr);
         vkFreeMemory(vulkanContext.getDevice(), stagingBufferMemory, nullptr);
     }
 
-    // Létrehozza a Depth Buffert (mélységi kép)
     void createDepthResources() {
-        depthFormat = VK_FORMAT_D32_SFLOAT; // Standard mélység formátum
+        depthFormat = VK_FORMAT_D32_SFLOAT;
         VkExtent2D swapChainExtent = vulkanSwapchain.getExtent();
 
-        // 1. Kép létrehozása
         vulkanContext.createImage(
             swapChainExtent.width,
             swapChainExtent.height,
             depthFormat,
             VK_IMAGE_TILING_OPTIMAL,
-            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // Mélységi pufferként használjuk
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             depthImage,
             depthImageMemory
         );
-
-        // 2. Képnézet (ImageView) létrehozása
         depthImageView = vulkanContext.createImageView(
             depthImage,
             depthFormat,
-            VK_IMAGE_ASPECT_DEPTH_BIT // Mélységi képként kezeljük
+            VK_IMAGE_ASPECT_DEPTH_BIT
         );
 
-        // (Megjegyzés: Itt még kellene egy layout transition,
-        // de a RenderPass-unk kezeli az 'UNDEFINED' layout-ot)
+        vulkanContext.executeSingleTimeCommands([&](VkCommandBuffer commandBuffer) {
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = depthImage;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier
+            );
+        });
     }
+
 
     void initVulkan()
     {
-        // 1. Instance
         vulkanContext.initInstance(window);
-
-        // 2. Surface
         if (glfwCreateWindowSurface(vulkanContext.getInstance(), window, nullptr, &surface) != VK_SUCCESS)
         {
             throw runtime_error("failed to create window surface!");
         }
-
-        // 3. Device
         vulkanContext.initDevice(surface);
-
-        // 4. Swapchain
         vulkanSwapchain.create(&vulkanContext, surface, window);
-
-        // --- MÓDOSÍTOTT SORREND ---
-
-        // 5. ÚJ: Depth Buffer létrehozása (a pipeline-nak kell)
         createDepthResources();
-
-        // 6. ÚJ: Vertex Buffer létrehozása (a renderelőnek kell)
         createVertexBuffer();
 
-        // 7. MÓDOSÍTOTT: Pipeline létrehozása
-        // Átadjuk az új mélységi adatokat, amiket a pipeline elvár
+        // JAVÍTVA: A VulkanPipeline create hívása helyes
         vulkanPipeline.create(&vulkanContext, &vulkanSwapchain, depthImageView, depthFormat);
-
-        // 8. Renderer létrehozása
+        // JAVÍTVA: A VulkanRenderer create hívása helyes
         vulkanRenderer.create(&vulkanContext, &vulkanSwapchain);
     }
-
 
     void initWindow()
     {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan Kocka", nullptr, nullptr);
+        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan Torus", nullptr, nullptr);
     }
 
     void mainLoop()
     {
+        auto lastTime = std::chrono::high_resolution_clock::now();
+
         std::cout << "kacsa a Main Loop (Javított Kód)" << std::endl;
         while (!glfwWindowShouldClose(window)) {
+
+            // Valós deltaTime kiszámítása
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+            lastTime = currentTime;
+
             glfwPollEvents();
 
-            // MÓDOSÍTVA: Átadjuk a vertex buffert a renderelőnek
-            // EZ HIBA LESZ, amíg a VulkanRenderer-t nem frissítjük!
-            vulkanRenderer.drawFrame(&vulkanSwapchain, &vulkanPipeline, vertexBuffer);
+            // --- INPUT KEZELÉS (FPS FÜGGETLEN) ---
+            float velocity = cameraSpeed * deltaTime;
+
+            // FWD/BACK (W/S) -> Z tengely
+            if (keysPressed[GLFW_KEY_W])
+                cameraPosition.z += velocity;
+            if (keysPressed[GLFW_KEY_S])
+                cameraPosition.z -= velocity;
+
+            // STRAFE (A/D) -> X tengely
+            if (keysPressed[GLFW_KEY_A])
+                cameraPosition.x -= velocity;
+            if (keysPressed[GLFW_KEY_D])
+                cameraPosition.x += velocity;
+
+            // FEL/LE (R/F) -> Y tengely (EZ AZ ÚJ BLOKK)
+            if (keysPressed[GLFW_KEY_R])
+                cameraPosition.y += velocity;
+            if (keysPressed[GLFW_KEY_F])
+                cameraPosition.y -= velocity;
+
+
+            vulkanRenderer.drawFrame(&vulkanSwapchain, &vulkanPipeline, vertexBuffer, cameraPosition);
         }
 
-        // Várjuk meg, amíg a GPU befejezi az utolsó munkát is
         vkDeviceWaitIdle(vulkanContext.getDevice());
     }
 
     void cleanup()
     {
-        // A létrehozással ellentétes sorrendben takarítunk
-
         vulkanRenderer.cleanup();
         vulkanPipeline.cleanup();
         vulkanSwapchain.cleanup();
 
-        // --- ÚJ: Erőforrások törlése ---
         vkDestroyImageView(vulkanContext.getDevice(), depthImageView, nullptr);
         vkDestroyImage(vulkanContext.getDevice(), depthImage, nullptr);
         vkFreeMemory(vulkanContext.getDevice(), depthImageMemory, nullptr);
 
         vkDestroyBuffer(vulkanContext.getDevice(), vertexBuffer, nullptr);
         vkFreeMemory(vulkanContext.getDevice(), vertexBufferMemory, nullptr);
-        // --- ---
 
         vkDestroySurfaceKHR(vulkanContext.getInstance(), surface, nullptr);
         vulkanContext.cleanup();
@@ -206,6 +265,7 @@ private:
         glfwTerminate();
     }
 };
+
 
 int main()
 {
