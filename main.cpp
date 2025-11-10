@@ -18,15 +18,13 @@
 #include <set>
 #include <GLFW/glfw3native.h>
 
-// 1. BEILLESZTJÜK AZ ÚJ OSZTÁLYT
-#include "VulkanCore/VulkanContext.h" // Vagy ahogy a mappát elnevezted
+// 1. BEILLESZTJÜK AZ OSZTÁLYAINKAT
+#include "VulkanCore/VulkanContext.h"
+#include "VulkanCore/VulkanSwapchain.h" // <-- ÚJ
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 using namespace std;
-
-// TÖRÖLVE: A C-stílusú proxy függvények (Create/DestroyDebugUtilsMessengerEXT)
-// TÖRÖLVE: A debugCallback
 
 class HelloTriangleApplication
 {
@@ -42,153 +40,53 @@ public:
 private:
     GLFWwindow* window;
 
-    // 2. ÚJ TAGVÁLTOZÓ
+    // --- Core Komponensek ---
     VulkanContext vulkanContext;
+    VulkanSwapchain vulkanSwapchain; // <-- ÚJ OBJEKTUM
 
-    // TÖRÖLVE: instance, device, physicalDevice, graphicsQueue,
-    // presentQueue, debugMessenger, commandPool, validationLayers,
-    // deviceExtensions, enableValidationLayers
-
-    // Ezek az alkalmazás-specifikus tagváltozók MARADNAK
+    // --- Alkalmazás-specifikus objektumok (MARADNAK) ---
     VkSurfaceKHR surface;
-    VkSwapchainKHR swapChain;
-    vector<VkImage> swapChainImages;
-    VkFormat swapChainImageFormat;
-    VkExtent2D swapChainExtent;
-    vector<VkImageView> swapChainImageViews;
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
     vector<VkFramebuffer> swapChainFramebuffers;
     VkCommandBuffer commandBuffer;
+
+    // Szinkronizáció (Ezt is ki fogjuk szervezni, de egyelőre marad)
     VkSemaphore imageAvailableSemaphore;
     VkSemaphore renderFinishedSemaphore;
     VkFence inFlightFence;
 
-    // TÖRÖLVE: QueueFamilyIndices struct (átkerült a VulkanContext.h-ba)
-    // TÖRÖLVE: SwapChainSupportDetails struct (átkerült a VulkanContext.h-ba)
+    // TÖRÖLVE: A swapChain... tagváltozók (átkerültek a VulkanSwapchain-be)
+    // TÖRÖLVE: QueueFamilyIndices, SwapChainSupportDetails (a Context-ben vannak)
 
     void initVulkan()
     {
-        // 3. A "MAG" INICIALIZÁLÁSA
+        // 1. A "MAG" INICIALIZÁLÁSA
         vulkanContext.initVulkan(window);
 
-        // 4. LÉTREHOZZUK A SURFACE-T (az ablak és a Vulkan Instance összekötése)
-        // Erre az alkalmazásunknak is szüksége van a Swapchain miatt.
+        // 2. LÉTREHOZZUK A SURFACE-T
         if (glfwCreateWindowSurface(vulkanContext.getInstance(), window, nullptr, &surface) != VK_SUCCESS)
         {
             throw runtime_error("failed to create window surface!");
         }
 
-        // 5. AZ ALKALMAZÁS-SPECIFIKUS RÉSZEK INICIALIZÁLÁSA
-        // (Ezek már a vulkanContext-et használják)
-        createSwapChain();
-        createImageViews();
+        // 3. LÉTREHOZZUK A SWAPCHAIN-T (az új osztály segítségével)
+        vulkanSwapchain.create(&vulkanContext, surface, window);
+
+        // 4. AZ ALKALMAZÁS-SPECIFIKUS RÉSZEK INICIALIZÁLÁSA
         createRenderPass();
         createGraphicsPipeline();
         createFramebuffers();
-        createCommandBuffer(); // Figyelem: ez már csak allokál, nem hoz létre pool-t
+        createCommandBuffer();
         createSyncObjects();
     }
 
-    // TÖRÖLVE: checkValidationLayerSupport
-    // TÖRÖLVE: getRequiredExtensions
-    // TÖRÖLVE: populateDebugMessengerCreateInfo
-    // TÖRÖLVE: setupDebugMessenger
-    // TÖRÖLVE: createInstance
-    // TÖRÖLVE: checkDeviceExtensionSupport
-    // TÖRÖLVE: isDeviceSuitable
-    // TÖRÖLVE: pickPhysicalDevice
-    // TÖRÖLVE: findQueueFamilies
-    // TÖRÖLVE: createLogicalDevice
-    // TÖRÖLVE: createSurface
-    // TÖRÖLVE: createCommandPool
-
-    // TÖRÖLVE: querySwapChainSupport (átkerült a VulkanContext-be)
+    // TÖRÖLVE: Az összes Swapchain-hez kapcsolódó függvény
+    // (createSwapChain, createImageViews, choose... stb.)
+    // TÖRÖLVE: A Context-hez kapcsolódó összes függvény
 
     // --- Ezek a segédfüggvények MARADNAK (de frissítve) ---
-
-    // Kiválasztja a legjobb swap surface formátumot az elérhető formátumok közül
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const vector<VkSurfaceFormatKHR>& availableFormats)
-    {
-        for (const auto& availableFormat : availableFormats)
-        {
-            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace ==
-                VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-            {
-                return availableFormat;
-            }
-        }
-        return availableFormats[0];
-    }
-
-    // Kiválasztja a legjobb prezentációs módot
-    VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes)
-    {
-        for (const auto& availablePresentMode : availablePresentModes)
-        {
-            if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-            {
-                return availablePresentMode;
-            }
-        }
-        return VK_PRESENT_MODE_FIFO_KHR;
-    }
-
-    // Meghatározza a swap chain képek felbontását
-    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
-    {
-        if (capabilities.currentExtent.width != numeric_limits<uint32_t>::max())
-        {
-            return capabilities.currentExtent;
-        }
-        else
-        {
-            int width, height;
-            glfwGetFramebufferSize(window, &width, &height);
-
-            VkExtent2D actualExtent = {
-                static_cast<uint32_t>(width),
-                static_cast<uint32_t>(height)
-            };
-
-            actualExtent.width = clamp(actualExtent.width, capabilities.minImageExtent.width,
-                                       capabilities.maxImageExtent.width);
-            actualExtent.height = clamp(actualExtent.height, capabilities.minImageExtent.height,
-                                        capabilities.maxImageExtent.height);
-
-            return actualExtent;
-        }
-    }
-
-
-    void createImageViews()
-    {
-        swapChainImageViews.resize(swapChainImages.size());
-        for (size_t i = 0; i < swapChainImages.size(); i++)
-        {
-            VkImageViewCreateInfo createInfo{};
-            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            createInfo.image = swapChainImages[i];
-            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            createInfo.format = swapChainImageFormat;
-            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            createInfo.subresourceRange.baseMipLevel = 0;
-            createInfo.subresourceRange.levelCount = 1;
-            createInfo.subresourceRange.baseArrayLayer = 0;
-            createInfo.subresourceRange.layerCount = 1;
-
-            // JAVÍTVA: vulkanContext.getDevice() használata
-            if (vkCreateImageView(vulkanContext.getDevice(), &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS)
-            {
-                throw runtime_error("failed to create image views!");
-            }
-        }
-    }
 
     static vector<char> readFile(const string& filename)
     {
@@ -213,18 +111,17 @@ private:
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
         VkShaderModule shaderModule;
-        // JAVÍTVA: vulkanContext.getDevice() használata
         if (vkCreateShaderModule(vulkanContext.getDevice(), &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
         {
             throw std::runtime_error("failed to create shader module!");
         }
-
         return shaderModule;
     }
 
     void createRenderPass() {
         VkAttachmentDescription colorAttachment{};
-        colorAttachment.format = swapChainImageFormat;
+        // JAVÍTVA: A formátumot a swapchain-től kérjük
+        colorAttachment.format = vulkanSwapchain.getImageFormat();
         colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
         colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -259,7 +156,6 @@ private:
         renderPassInfo.dependencyCount = 1;
         renderPassInfo.pDependencies = &dependency;
 
-        // JAVÍTVA: vulkanContext.getDevice() használata
         if (vkCreateRenderPass(vulkanContext.getDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
             throw std::runtime_error("failed to create render pass!");
         }
@@ -346,7 +242,6 @@ private:
         pipelineLayoutInfo.setLayoutCount = 0;
         pipelineLayoutInfo.pushConstantRangeCount = 0;
 
-        // JAVÍTVA: vulkanContext.getDevice() használata
         if (vkCreatePipelineLayout(vulkanContext.getDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
         {
             throw std::runtime_error("failed to create pipeline layout!");
@@ -370,23 +265,26 @@ private:
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
         pipelineInfo.basePipelineIndex = -1;
 
-        // JAVÍTVA: vulkanContext.getDevice() használata
         if (vkCreateGraphicsPipelines(vulkanContext.getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) !=
             VK_SUCCESS)
         {
             throw std::runtime_error("failed to create graphics pipeline!");
         }
 
-        // JAVÍTVA: vulkanContext.getDevice() használata
         vkDestroyShaderModule(vulkanContext.getDevice(), fragShaderModule, nullptr);
         vkDestroyShaderModule(vulkanContext.getDevice(), vertShaderModule, nullptr);
     }
 
     void createFramebuffers() {
-        swapChainFramebuffers.resize(swapChainImageViews.size());
-        for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+        // JAVÍTVA: Az image view-kat és a méretet a swapchain-től kérjük
+        const auto& imageViews = vulkanSwapchain.getImageViews();
+        VkExtent2D extent = vulkanSwapchain.getExtent();
+
+        swapChainFramebuffers.resize(imageViews.size());
+
+        for (size_t i = 0; i < imageViews.size(); i++) {
             VkImageView attachments[] = {
-                swapChainImageViews[i]
+                imageViews[i] // JAVÍTVA
             };
 
             VkFramebufferCreateInfo framebufferInfo{};
@@ -394,11 +292,10 @@ private:
             framebufferInfo.renderPass = renderPass;
             framebufferInfo.attachmentCount = 1;
             framebufferInfo.pAttachments = attachments;
-            framebufferInfo.width = swapChainExtent.width;
-            framebufferInfo.height = swapChainExtent.height;
+            framebufferInfo.width = extent.width;   // JAVÍTVA
+            framebufferInfo.height = extent.height; // JAVÍTVA
             framebufferInfo.layers = 1;
 
-            // JAVÍTVA: vulkanContext.getDevice() használata
             if (vkCreateFramebuffer(vulkanContext.getDevice(), &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create framebuffer!");
             }
@@ -408,12 +305,10 @@ private:
     void createCommandBuffer() {
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        // JAVÍTVA: vulkanContext.getCommandPool() használata
         allocInfo.commandPool = vulkanContext.getCommandPool();
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocInfo.commandBufferCount = 1;
 
-        // JAVÍTVA: vulkanContext.getDevice() használata
         if (vkAllocateCommandBuffers(vulkanContext.getDevice(), &allocInfo, &commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate command buffers!");
         }
@@ -427,12 +322,15 @@ private:
             throw std::runtime_error("failed to begin recording command buffer!");
         }
 
+        // JAVÍTVA: A méretet a swapchain-től kérjük
+        VkExtent2D extent = vulkanSwapchain.getExtent();
+
         VkRenderPassBeginInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = renderPass;
         renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
         renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = swapChainExtent;
+        renderPassInfo.renderArea.extent = extent; // JAVÍTVA
         VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
         renderPassInfo.clearValueCount = 1;
         renderPassInfo.pClearValues = &clearColor;
@@ -443,15 +341,15 @@ private:
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = static_cast<float>(swapChainExtent.width);
-        viewport.height = static_cast<float>(swapChainExtent.height);
+        viewport.width = static_cast<float>(extent.width);  // JAVÍTVA
+        viewport.height = static_cast<float>(extent.height); // JAVÍTVA
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
         VkRect2D scissor{};
         scissor.offset = {0, 0};
-        scissor.extent = swapChainExtent;
+        scissor.extent = extent; // JAVÍTVA
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
@@ -460,70 +358,6 @@ private:
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");
         }
-    }
-
-    void createSwapChain()
-    {
-        // JAVÍTVA: vulkanContext-en keresztül hívjuk
-        SwapChainSupportDetails swapChainSupport = vulkanContext.querySwapChainSupport(vulkanContext.getPhysicalDevice(), surface);
-
-        VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
-        VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
-        VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
-
-        uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-        if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
-        {
-            imageCount = swapChainSupport.capabilities.maxImageCount;
-        }
-
-        VkSwapchainCreateInfoKHR createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = surface;
-        createInfo.minImageCount = imageCount;
-        createInfo.imageFormat = surfaceFormat.format;
-        createInfo.imageColorSpace = surfaceFormat.colorSpace;
-        createInfo.imageExtent = extent;
-        createInfo.imageArrayLayers = 1;
-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-        // JAVÍTVA: vulkanContext-ből kérjük az indexeket
-        QueueFamilyIndices indices = vulkanContext.getQueueFamilies();
-        uint32_t queueFamilyIndices[] = {
-            indices.graphicsFamily.value(),
-            indices.presentFamily.value()
-        };
-
-        if (indices.graphicsFamily != indices.presentFamily)
-        {
-            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            createInfo.queueFamilyIndexCount = 2;
-            createInfo.pQueueFamilyIndices = queueFamilyIndices;
-        }
-        else
-        {
-            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        }
-
-        createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
-        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        createInfo.presentMode = presentMode;
-        createInfo.clipped = VK_TRUE;
-        createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-        // JAVÍTVA: vulkanContext.getDevice() használata
-        if (vkCreateSwapchainKHR(vulkanContext.getDevice(), &createInfo, nullptr, &swapChain) != VK_SUCCESS)
-        {
-            throw runtime_error("failed to create swap chain!");
-        }
-
-        // JAVÍTVA: vulkanContext.getDevice() használata
-        vkGetSwapchainImagesKHR(vulkanContext.getDevice(), swapChain, &imageCount, nullptr);
-        swapChainImages.resize(imageCount);
-        vkGetSwapchainImagesKHR(vulkanContext.getDevice(), swapChain, &imageCount, swapChainImages.data());
-
-        swapChainImageFormat = surfaceFormat.format;
-        swapChainExtent = extent;
     }
 
     void createSyncObjects()
@@ -535,7 +369,6 @@ private:
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        // JAVÍTVA: vulkanContext.getDevice() használata
         if (vkCreateSemaphore(vulkanContext.getDevice(), &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
             vkCreateSemaphore(vulkanContext.getDevice(), &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS ||
             vkCreateFence(vulkanContext.getDevice(), &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS)
@@ -545,15 +378,14 @@ private:
     }
 
     void drawFrame() {
-        // JAVÍTVA: vulkanContext.getDevice() használata
         vkWaitForFences(vulkanContext.getDevice(), 1, &inFlightFence, VK_TRUE, UINT64_MAX);
         vkResetFences(vulkanContext.getDevice(), 1, &inFlightFence);
 
         uint32_t imageIndex;
-        // JAVÍTVA: vulkanContext.getDevice() használata
+        // JAVÍTVA: A swapchain-t az új objektumtól kérjük
         vkAcquireNextImageKHR(
             vulkanContext.getDevice(),
-            swapChain,
+            vulkanSwapchain.getSwapchain(), // JAVÍTVA
             UINT64_MAX,
             imageAvailableSemaphore,
             VK_NULL_HANDLE,
@@ -578,7 +410,6 @@ private:
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
-        // JAVÍTVA: vulkanContext.getGraphicsQueue() használata
         if (vkQueueSubmit(vulkanContext.getGraphicsQueue(), 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
             throw std::runtime_error("failed to submit draw command buffer!");
         }
@@ -588,12 +419,12 @@ private:
         presentInfo.waitSemaphoreCount = 1;
         presentInfo.pWaitSemaphores = signalSemaphores;
 
-        VkSwapchainKHR swapChains[] = {swapChain};
+        // JAVÍTVA: A swapchain-t az új objektumtól kérjük
+        VkSwapchainKHR swapChains[] = {vulkanSwapchain.getSwapchain()}; // JAVÍTVA
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = swapChains;
         presentInfo.pImageIndices = &imageIndex;
 
-        // JAVÍTVA: vulkanContext.getPresentQueue() használata
         vkQueuePresentKHR(vulkanContext.getPresentQueue(), &presentInfo);
     }
 
@@ -611,7 +442,6 @@ private:
             glfwPollEvents();
             drawFrame();
         }
-        // JAVÍTVA: vulkanContext.getDevice() használata
         vkDeviceWaitIdle(vulkanContext.getDevice());
     }
 
@@ -632,24 +462,19 @@ private:
         vkDestroyPipelineLayout(vulkanContext.getDevice(), pipelineLayout, nullptr);
         vkDestroyRenderPass(vulkanContext.getDevice(), renderPass, nullptr);
 
-        // 4. Az ImageView-k törlése
-        for (auto imageView : swapChainImageViews) {
-            vkDestroyImageView(vulkanContext.getDevice(), imageView, nullptr);
-        }
+        // TÖRÖLVE: Az ImageView-k törlése (a Swapchain csinálja)
+        // TÖRÖLVE: A Swapchain törlése (a Swapchain csinálja)
 
-        // 5. A Swapchain törlése
-        vkDestroySwapchainKHR(vulkanContext.getDevice(), swapChain, nullptr);
+        // 4. ÚJ: A VulkanSwapchain takarítása
+        vulkanSwapchain.cleanup();
 
-        // 6. FONTOS: A Surface törlése (az Instance gyermeke)
-        // Ezt a main.cpp hozta létre, ezért neki kell törölnie,
-        // MÉG a Context cleanup (és az Instance törlése) ELŐTT.
+        // 5. FONTOS: A Surface törlése (az Instance gyermeke)
         vkDestroySurfaceKHR(vulkanContext.getInstance(), surface, nullptr);
 
-        // 7. A VÉGÉN hívjuk meg a Context saját takarítóját
-        // (ez törli: Instance, Device, CommandPool, Debugger)
+        // 6. A VÉGÉN hívjuk meg a Context saját takarítóját
         vulkanContext.cleanup();
 
-        // 8. Végül a GLFW takarítása
+        // 7. Végül a GLFW takarítása
         glfwDestroyWindow(window);
         glfwTerminate();
     }
