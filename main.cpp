@@ -46,23 +46,29 @@ private:
 
     void initVulkan()
     {
-        // 1. A "MAG" INICIALIZÁLÁSA
-        vulkanContext.initVulkan(window);
+        // 1. LÉPÉS: Instance és Debugger létrehozása
+        // (A régi "vulkanContext.initVulkan(window);" helyett)
+        vulkanContext.initInstance(window);
 
-        // 2. LÉTREHOZZUK A SURFACE-T
+        // 2. LÉPÉS: LÉTREHOZZUK A SURFACE-T
+        // (Ez már korábban is itt volt, és ez a helyes)
         if (glfwCreateWindowSurface(vulkanContext.getInstance(), window, nullptr, &surface) != VK_SUCCESS)
         {
             throw runtime_error("failed to create window surface!");
         }
 
-        // 3. LÉTREHOZZUK A SWAPCHAIN-T
+        // 3. LÉPÉS: Eszköz és CommandPool létrehozása (a surface átadásával)
+        vulkanContext.initDevice(surface);
+
+        // 4. LÉPÉS: LÉTREHOZZUK A SWAPCHAIN-T
         vulkanSwapchain.create(&vulkanContext, surface, window);
 
-        // 4. LÉTREHOZZUK A PIPELINE-T
+        // 5. LÉPÉS: LÉTREHOZZUK A PIPELINE-T
         vulkanPipeline.create(&vulkanContext, &vulkanSwapchain);
 
-        // 5. LÉTREHOZZUK A RENDERELŐT
-        // Ez hozza létre a CommandBuffer-eket és a Szinkronizációt
+        // 6. LÉPÉS: LÉTREHOZZUK A RENDERELŐT
+        // (Fontos: Ennek a create() hívásnak a createSyncObjects() miatt
+        // a swapchain->getImageCount() hívás előtt kell lennie)
         vulkanRenderer.create(&vulkanContext, &vulkanSwapchain);
     }
 
@@ -79,7 +85,7 @@ private:
 
     void mainLoop()
     {
-        std::cout << "Indul a Main Loop (Javított Kód)" << std::endl;
+        std::cout << "kacsa a Main Loop (Javított Kód)" << std::endl;
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
 

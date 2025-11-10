@@ -6,6 +6,7 @@ using namespace std;
 
 VulkanRenderer::VulkanRenderer() : context(nullptr), currentFrame(0) {
     // Konstruktor
+    std::cout << "KACSA RENDERER INICIALIZALVA" << std::endl; // <-- 2. ADD HOZZÁ EZT A SORT
 }
 
 VulkanRenderer::~VulkanRenderer() {
@@ -19,7 +20,7 @@ void VulkanRenderer::create(VulkanContext* ctx, VulkanSwapchain* swapchain) {
     createCommandBuffers();
 
     // Létrehozzuk a szinkronizációs objektumokat (2 db-ot minden típusból)
-    createSyncObjects();
+    createSyncObjects(swapchain);
 }
 
 void VulkanRenderer::cleanup() {
@@ -56,6 +57,14 @@ void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipel
         VK_NULL_HANDLE,
         &imageIndex
     );
+
+    if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+        // Ha igen, várunk arra a fence-re (ami egy *másik* frame-hez tartozhat)
+        vkWaitForFences(context->getDevice(), 1, &imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+    }
+    // Most már biztosan szabad a kép, társítjuk az *aktuális* frame fence-éhez
+    imagesInFlight[imageIndex] = inFlightFences[currentFrame];
+
 
     // Miután megkaptuk a kép indexét, reseteljük a CPU-oldali fence-t.
     // Most már biztonságosan megtehetjük, mert tudjuk, hogy a GPU végzett az előző
@@ -136,12 +145,14 @@ void VulkanRenderer::createCommandBuffers() {
 }
 
 // JAVÍTVA: A szinkronizációs objektumok létrehozása
-void VulkanRenderer::createSyncObjects()
+void VulkanRenderer::createSyncObjects(VulkanSwapchain* swapchain)
 {
     // Átméretezzük a vektorokat MAX_FRAMES_IN_FLIGHT méretűre (2)
     imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+    imagesInFlight.resize(swapchain->getImageCount(), VK_NULL_HANDLE);
 
     VkSemaphoreCreateInfo semaphoreInfo{};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;

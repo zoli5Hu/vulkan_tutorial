@@ -29,11 +29,16 @@ private:
     // ahány "frame in flight" van (MAX_FRAMES_IN_FLIGHT)
     std::vector<VkCommandBuffer> commandBuffers;
 
-    // Szinkronizációs objektumok
-    // JAVÍTVA: Mindegyikből MAX_FRAMES_IN_FLIGHT (2) darab lesz
+    // --- Szinkronizációs objektumok (MIND PRIVATE) ---
+
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
+
+    // Az eredeti fence vektor (CSAK EGYSZER, ITT)
     std::vector<VkFence> inFlightFences;
+
+    // Az új, képeket követő fence vektor
+    std::vector<VkFence> imagesInFlight;
 
     // Nyomon követi az aktuális frame indexet (0 vagy 1)
     uint32_t currentFrame = 0;
@@ -43,11 +48,11 @@ private:
 
     // --- Privát segédfüggvények (áthelyezve a main.cpp-ből) ---
 
-    // Létrehozza a parancspuffereket (MÁR JAVÍTVA: annyit, amennyi frame in flight van)
+    // Létrehozza a parancspuffereket
     void createCommandBuffers();
 
-    // Létrehozza a szinkronizációs objektumokat (MÁR JAVÍTVA: 2-2 darabot)
-    void createSyncObjects();
+    // Létrehozza a szinkronizációs objektumokat (JAVÍTOTT SZIGNATÚRA)
+    void createSyncObjects(VulkanSwapchain* swapchain);
 
     // Rögzíti a rajzolási parancsokat az adott parancspufferbe
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, VulkanSwapchain* swapchain, VulkanPipeline* pipeline);

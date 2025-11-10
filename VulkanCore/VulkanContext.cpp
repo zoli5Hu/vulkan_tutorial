@@ -70,27 +70,18 @@ VulkanContext::~VulkanContext() {
 
 // --- Fő metódusok ---
 
-void VulkanContext::initVulkan(GLFWwindow* window) {
+void VulkanContext::initInstance(GLFWwindow* window) {
+    // Csak az instance-t és a debuggert hozza létre
     createInstance();
     setupDebugMessenger();
+}
 
-    // A Surface-t (ablak felületet) itt kell létrehozni,
-    // mert kell hozzá az instance (amit már létrehoztunk)
-    // és az ablak (amit paraméterként kapunk).
-    // DE a surface-t a main.cpp fogja birtokolni és törölni,
-    // mert az ablakhoz kötődik.
-    VkSurfaceKHR surface;
-    //lérehozza a surface t a glfw segítségével
-    if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create window surface!");
-    }
-
+void VulkanContext::initDevice(VkSurfaceKHR surface) {
+    // A surface-t paraméterként kapja, és beállítja a fizikai
+    // és logikai eszközt, valamint a command pool-t.
     pickPhysicalDevice(surface);
     createLogicalDevice(surface);
     createCommandPool();
-
-    // A surface-t itt el "felejtjük", a main.cpp fogja
-    // újra lekérni és használni (és törölni).
 }
 
 void VulkanContext::cleanup() {

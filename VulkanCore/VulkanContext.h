@@ -50,7 +50,8 @@ public:
     ~VulkanContext();
 
     // Fő inicializáló metódusok
-    void initVulkan(GLFWwindow* window);
+    void initInstance(GLFWwindow* window);
+    void initDevice(VkSurfaceKHR surface);
     void cleanup();
 
     // Get-terek (ezekre lesz szükség a többi osztályban)
