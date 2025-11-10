@@ -14,6 +14,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
+include(FetchContent)
+FetchContent_Declare(
+        glm
+        GIT_REPOSITORY https://github.com/g-truc/glm.git
+        GIT_TAG 1.0.1
+)
+FetchContent_MakeAvailable(glm)
+
 
 # ========= SHADER FORDÍTÁS KEZDETE =========
 
@@ -75,3 +83,5 @@ add_dependencies(foobar CompileShaders)
 
 # Include és linkelés
 target_link_libraries(foobar PRIVATE Vulkan::Vulkan glfw)
+target_link_libraries(foobar PRIVATE Vulkan::Vulkan glm)
+
