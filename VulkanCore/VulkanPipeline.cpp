@@ -3,20 +3,17 @@
 
 #include <array>
 #include <glm/glm.hpp>
-#include <fstream> // readFile miatt
-#include <vector> // readFile miatt
+#include <fstream>
+#include <vector>
 using namespace std;
 
 VulkanPipeline::VulkanPipeline() : context(nullptr), renderPass(VK_NULL_HANDLE),
                                    pipelineLayout(VK_NULL_HANDLE), graphicsPipeline(VK_NULL_HANDLE), wireframePipeline(VK_NULL_HANDLE) {
-    // Konstruktor
 }
 
 VulkanPipeline::~VulkanPipeline() {
-    // Destruktor
 }
 
-// MÓDOSÍTVA: Hozzáadva a createWireframePipeline hívás
 void VulkanPipeline::create(VulkanContext* ctx, VulkanSwapchain* swapchain, VkImageView depthImageView, VkFormat depthFormat) {
     this->context = ctx;
 
@@ -27,23 +24,17 @@ void VulkanPipeline::create(VulkanContext* ctx, VulkanSwapchain* swapchain, VkIm
 }
 
 void VulkanPipeline::cleanup() {
-    // A létrehozással ellentétes sorrendben törlünk
     for (auto framebuffer : swapChainFramebuffers) {
         vkDestroyFramebuffer(context->getDevice(), framebuffer, nullptr);
     }
-    vkDestroyPipeline(context->getDevice(), wireframePipeline, nullptr); // WIREFRAME TÖRLÉS
+    vkDestroyPipeline(context->getDevice(), wireframePipeline, nullptr);
     vkDestroyPipeline(context->getDevice(), graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(context->getDevice(), pipelineLayout, nullptr);
     vkDestroyRenderPass(context->getDevice(), renderPass, nullptr);
 }
 
-
-// --- Privát segédfüggvények (meglévő) ---
-
-// MÓDOSÍTVA: Hozzáadva a 'depthFormat' paraméter
 void VulkanPipeline::createRenderPass(VkFormat swapchainFormat, VkFormat depthFormat) {
 
-    // 1. Szín Attachment (Ami eddig is volt)
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = swapchainFormat;
     colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -54,43 +45,38 @@ void VulkanPipeline::createRenderPass(VkFormat swapchainFormat, VkFormat depthFo
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    // 2. ÚJ: Mélységi Attachment
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = depthFormat;
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Töröljük a mélységet minden frame elején
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // A frame végén nem érdekel minket
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    // Referenciák
     VkAttachmentReference colorAttachmentRef{};
-    colorAttachmentRef.attachment = 0; // index 0
+    colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference depthAttachmentRef{};
-    depthAttachmentRef.attachment = 1; // index 1
+    depthAttachmentRef.attachment = 1;
     depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    // Subpass leírás
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
-    subpass.pDepthStencilAttachment = &depthAttachmentRef; // <- Összekötjük a mélységi attachment-et
+    subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    // MÓDOSÍTVA: Várakoznunk kell a korai mélységi tesztre is
     dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.srcAccessMask = 0;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-    // 2 attachment (Color, Depth)
     std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
 
     VkRenderPassCreateInfo renderPassInfo{};
@@ -144,19 +130,14 @@ void VulkanPipeline::createGraphicsPipeline()
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
-    // --- ÚJ: VERTEX INPUT BEÁLLÍTÁSA ---
-    // A 5 floatot tartalmaznak vertexenként (X,Y,Z,U,V)
     const size_t g_cubeVertexSize = sizeof(float) * 5;
 
-    // Binding leírás: A 0-s kötésnél 5 float méretű ugrás (stride) van.
     const VkVertexInputBindingDescription bindingInfo = {
         .binding   = 0,
         .stride    = (uint32_t)g_cubeVertexSize,
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
 
-    // Attribútum leírás: A 0-s shader 'location' (in_position)
-    // a 0-s 'binding'-ből jön, 0 'offset'-tel, és 3 float-ot (R32G32B32) olvas.
     const VkVertexInputAttributeDescription attributeInfo = {
         .location = 0,
         .binding  = 0,
@@ -164,15 +145,12 @@ void VulkanPipeline::createGraphicsPipeline()
         .offset   = 0u,
     };
 
-    // A Vertex Input State, ami a pipeline-nak kell
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount   = 1;
     vertexInputInfo.pVertexBindingDescriptions      = &bindingInfo;
     vertexInputInfo.vertexAttributeDescriptionCount = 1;
     vertexInputInfo.pVertexAttributeDescriptions    = &attributeInfo;
-
-    // --- VERTEX INPUT VÉGE ---
 
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -184,9 +162,9 @@ void VulkanPipeline::createGraphicsPipeline()
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL; // KITÖLTÖTT MÓD
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Hátlap eldobása
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -207,7 +185,6 @@ void VulkanPipeline::createGraphicsPipeline()
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    // Push constant (ez már jó volt a forgatáshoz)
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pushConstantRange.offset = 0;
@@ -225,15 +202,13 @@ void VulkanPipeline::createGraphicsPipeline()
         throw std::runtime_error("failed to create pipeline layout!");
     }
 
-    // --- DEPTH STENCIL STATE ---
     VkPipelineDepthStencilStateCreateInfo depthStencilState{};
     depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencilState.depthTestEnable = VK_TRUE; // Mélységteszt bekapcsolva
-    depthStencilState.depthWriteEnable = VK_TRUE; // Mélység írása bekapcsolva
-    depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS; // Ami közelebb van (kisebb Z), az nyer
+    depthStencilState.depthTestEnable = VK_TRUE;
+    depthStencilState.depthWriteEnable = VK_TRUE;
+    depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
     depthStencilState.depthBoundsTestEnable = VK_FALSE;
     depthStencilState.stencilTestEnable = VK_FALSE;
-    // --- DEPTH STENCIL VÉGE ---
 
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -249,7 +224,7 @@ void VulkanPipeline::createGraphicsPipeline()
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = pipelineLayout;
-    pipelineInfo.renderPass = renderPass; // A korábban létrehozott renderPass-t használjuk
+    pipelineInfo.renderPass = renderPass;
     pipelineInfo.subpass = 0;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
@@ -261,15 +236,12 @@ void VulkanPipeline::createGraphicsPipeline()
         throw std::runtime_error("failed to create graphics pipeline!");
     }
 
-    // A shaderekre már nincs szükség a pipeline létrehozása után
     vkDestroyShaderModule(context->getDevice(), fragShaderModule, nullptr);
     vkDestroyShaderModule(context->getDevice(), vertShaderModule, nullptr);
 }
 
-// ÚJ: A HIÁNYZÓ FÜGGVÉNY IMPLEMENTÁCIÓJA
 void VulkanPipeline::createWireframePipeline()
 {
-    // Ez nagyrészt a createGraphicsPipeline másolata, de a VK_POLYGON_MODE_LINE beállítással
     auto vertShaderCode = readFile("shaders/vert.spv");
     auto fragShaderCode = readFile("shaders/frag.spv");
 
@@ -305,7 +277,6 @@ void VulkanPipeline::createWireframePipeline()
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
-    // --- VERTEX INPUT BEÁLLÍTÁSA (MÁSOLVA) ---
     const size_t g_cubeVertexSize = sizeof(float) * 5;
 
     const VkVertexInputBindingDescription bindingInfo = {
@@ -328,30 +299,26 @@ void VulkanPipeline::createWireframePipeline()
     vertexInputInfo.vertexAttributeDescriptionCount = 1;
     vertexInputInfo.pVertexAttributeDescriptions    = &attributeInfo;
 
-    // --- INPUT ASSEMBLY (MÁSOLVA) ---
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-    // --- RASTERIZATION STATE (MÓDOSÍTVA: LINE) ---
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_LINE; // <<-- WIREFRAME BEÁLLÍTÁS
+    rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
-    // --- MULTISAMPLING (MÁSOLVA) ---
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-    // --- COLOR BLEND (MÁSOLVA) ---
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -364,7 +331,6 @@ void VulkanPipeline::createWireframePipeline()
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    // --- DEPTH STENCIL STATE (MÁSOLVA) ---
     VkPipelineDepthStencilStateCreateInfo depthStencilState{};
     depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencilState.depthTestEnable = VK_TRUE;
@@ -386,7 +352,7 @@ void VulkanPipeline::createWireframePipeline()
     pipelineInfo.pDepthStencilState = &depthStencilState;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pipelineLayout; // Ugyanazt a layoutot használja!
+    pipelineInfo.layout = pipelineLayout;
     pipelineInfo.renderPass = renderPass;
     pipelineInfo.subpass = 0;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
@@ -401,11 +367,9 @@ void VulkanPipeline::createWireframePipeline()
 
     vkDestroyShaderModule(context->getDevice(), fragShaderModule, nullptr);
     vkDestroyShaderModule(context->getDevice(), vertShaderModule, nullptr);
-} // <<-- HIÁNYZÓ ZÁRÓJEL PÓTOLVA
+}
 
-// MÓDOSÍTVA: Megkapja a 'depthImageView'-t
 void VulkanPipeline::createFramebuffers(VulkanSwapchain* swapchain, VkImageView depthImageView) {
-// ... a createFramebuffers, readFile, createShaderModule implementációk
     const auto& imageViews = swapchain->getImageViews();
     VkExtent2D extent = swapchain->getExtent();
 
@@ -413,15 +377,14 @@ void VulkanPipeline::createFramebuffers(VulkanSwapchain* swapchain, VkImageView 
 
     for (size_t i = 0; i < imageViews.size(); i++) {
 
-        // MÓDOSÍTVA: 2 attachment van
         std::array<VkImageView, 2> attachments = {
-            imageViews[i], // 0: Color
-            depthImageView // 1: Depth
+            imageViews[i],
+            depthImageView
         };
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass; // A (már 2 attachment-es) renderPass-t használjuk
+        framebufferInfo.renderPass = renderPass;
         framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
         framebufferInfo.pAttachments = attachments.data();
         framebufferInfo.width = extent.width;
@@ -434,7 +397,6 @@ void VulkanPipeline::createFramebuffers(VulkanSwapchain* swapchain, VkImageView 
     }
 }
 
-// Fájlt olvas be bájtokként és visszaadja egy vector<char>-ben
 vector<char> VulkanPipeline::readFile(const string& filename)
 {
     ifstream file(filename, ios::ate | ios::binary);

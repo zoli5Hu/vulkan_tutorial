@@ -4,7 +4,7 @@
 #include "VulkanContext.h"
 #include "VulkanSwapchain.h"
 #include "VulkanPipeline.h"
-#include "MeshObject.h" // A MeshObject osztály
+#include "MeshObject.h"
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -18,7 +18,6 @@ public:
     void create(VulkanContext* context, VulkanSwapchain* swapchain);
     void cleanup();
 
-    // MÓDOSÍTVA: A drawFrame már objektumok listáját fogadja
     void drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipeline, glm::vec3 cameraPosition, const std::vector<MeshObject*>& objects);
 private:
     std::vector<VkCommandBuffer> commandBuffers;
@@ -29,11 +28,8 @@ private:
     uint32_t currentFrame = 0;
     VulkanContext* context;
 
-    // TÖRÖLVE: const uint32_t cubeVertexCount = 1728;
-
     void createCommandBuffers();
     void createSyncObjects(VulkanSwapchain* swapchain);
 
-    // MÓDOSÍTVA: recordCommandBuffer is listát fogad
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, VulkanSwapchain* swapchain, VulkanPipeline* pipeline, glm::vec3 cameraPosition, const std::vector<MeshObject*>& objects);
 };

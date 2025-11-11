@@ -15,7 +15,6 @@ VulkanRenderer::VulkanRenderer() : context(nullptr), currentFrame(0) {
 }
 
 VulkanRenderer::~VulkanRenderer() {
-    // Destruktor
 }
 
 void VulkanRenderer::create(VulkanContext* ctx, VulkanSwapchain* swapchain) {
@@ -32,7 +31,6 @@ void VulkanRenderer::cleanup() {
     }
 }
 
-// JAVÍTVA: Szignatúra frissítve (eltűnt a VkBuffer)
 void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipeline, glm::vec3 cameraPosition, const std::vector<MeshObject*>& objects) {
     vkWaitForFences(context->getDevice(), 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -54,7 +52,6 @@ void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipel
     vkResetFences(context->getDevice(), 1, &inFlightFences[currentFrame]);
 
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-    // JAVÍTVA: Hívás frissítve
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex, swapchain, pipeline, cameraPosition, objects);
 
     VkSubmitInfo submitInfo{};
@@ -132,7 +129,6 @@ void VulkanRenderer::createSyncObjects(VulkanSwapchain* swapchain)
     }
 }
 
-// JAVÍTVA: Szignatúra frissítve + rajzolási logika behelyezve a MeshObject.draw()-ba
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, VulkanSwapchain* swapchain, VulkanPipeline* pipeline, glm::vec3 cameraPosition, const std::vector<MeshObject*>& objects) {
 
     VkCommandBufferBeginInfo beginInfo{};
@@ -158,7 +154,6 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     scissor.extent = extent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    // 1. Definiáljuk a törlési értékeket (Color és Depth)
     std::array<VkClearValue, 2> clearValues{};
     clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
     clearValues[1].depthStencil = {1.0f, 0};
@@ -174,21 +169,15 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    // Alapértelmezett pipeline kötése (FILL)
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getGraphicsPipeline());
 
-    // 1. Időalapú forgás kiszámítása
     static auto startTime = std::chrono::high_resolution_clock::now();
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    // --- VP (View Projection) SZÁMÍTÁS ---
-
-    // Projection (Vetorítés)
     const float aspectRatio = (float)extent.width / (float)extent.height;
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
 
-    // View (Kamera)
     glm::vec3 cameraDirection = glm::vec3(0.0f, 0.0f, 1.0f);
     glm::vec3 center = cameraPosition + cameraDirection;
     glm::vec3 up = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -197,27 +186,19 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     glm::mat4 viewProjection = projection * view;
 
 
-    // --- OBJEKTUMOK RAJZOLÁSA CIKLUSBAN ---
     for (size_t i = 0; i < objects.size(); ++i) {
         const auto& object = objects[i];
 
-        // CUBE-hoz (index 1) megkötjük a Wireframe Pipeline-t
         if (i == 1) {
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getWireframePipeline());
         } else {
-            // A többihez (torus, pyramid) a normál pipeline-t kötjük
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getGraphicsPipeline());
         }
 
-        // A MeshObject végzi a Push Constant feltöltést, buffer kötést és vkCmdDraw hívást
         object->draw(commandBuffer, pipeline->getPipelineLayout(), time, viewProjection, i == 1);
     }
-    // --- CIKLUS VÉGE ---
 
 
-
-
-    // Eltávolítva a régi vkCmdDraw hívás, azt már a MeshObject.draw() csinálja
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

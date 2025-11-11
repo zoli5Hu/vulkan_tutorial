@@ -10,19 +10,14 @@
 #include <stdexcept>
 #include <cstring>
 #include <iostream>
-#include <algorithm> // clamp-hoz
+#include <algorithm>
 #include <functional>
-#include <limits>    // numeric_limits-hez
+#include <limits>
 
 struct QueueFamilyIndices
 {
-    //jelenleg csak 1 változó de a struktúra hasznos lesz ha többet is hjozzá szeretnénk adni mert akkor egyszerűbb lesz visszaadni
-    //azért adjuk meg optionalnak mert lehet ,hogy nincs is ilyen queue family a gpu-n (pl csak compute van) és az uint32 csak pozitív értékeket tud tárolni
-    //ezért nemtudjuk ez lerendezn ia -1 értékkel
-    std::optional<uint32_t> graphicsFamily; // Itt tároljuk a graphics queue family indexét
-    //annak a családnak az indexe amelyik támogatja a prezentációt (ablakra rajzolást)
+    std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> presentFamily;
-
 
     bool isComplete()
     {
@@ -30,32 +25,22 @@ struct QueueFamilyIndices
     }
 };
 
-// Swap chain támogatási adatokat tároló struktúra
 struct SwapChainSupportDetails
 {
-    // Alap képességek: kép méretek, transzformációk, stb.
     VkSurfaceCapabilitiesKHR capabilities;
-    // Támogatott formátumok: színformátum és színtér kombinációk
     std::vector<VkSurfaceFormatKHR> formats;
-    // Elérhető megjelenítési módok: VSync, triple buffering, stb.
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-// A fő Context osztály:
-// Ez kezeli a Vulkan "mag" inicializálását és erőforrásait
-// (Instance, Device, Queues, CommandPool, Debugger)
 class VulkanContext {
 public:
-    // Konstruktor és destruktor
     VulkanContext();
     ~VulkanContext();
 
-    // Fő inicializáló metódusok
     void initInstance(GLFWwindow* window);
     void initDevice(VkSurfaceKHR surface);
     void cleanup();
 
-    // Get-terek (ezekre lesz szükség a többi osztályban)
     VkInstance getInstance() const { return instance; }
     VkDevice getDevice() const { return device; }
     VkPhysicalDevice getPhysicalDevice() const { return physicalDevice; }
@@ -64,48 +49,36 @@ public:
     VkCommandPool getCommandPool() const { return commandPool; }
     QueueFamilyIndices getQueueFamilies() const { return queueIndices; }
 
-    // Publikus segédfüggvény (a Swapchainnek kelleni fog)
-    // Lekérdezi a fizikai eszköz swap chain támogatási adatait
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice dev, VkSurfaceKHR surf);
 
-    // Megkeresi a megfelelő memória típust (pl. "GPU-lokális" vagy "CPU-látható")
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
-    // Létrehoz egy buffert (pl. Vertex Buffer) és memóriát allokál neki
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
-    // Létrehoz egy képet (pl. Depth Buffer)
     void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 
-    // Létrehoz egy képnézetet (ImageView) egy képhez
     VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 
-    // Egy parancsot azonnal elküld a GPU-nak (pl. másoláshoz)
     void executeSingleTimeCommands(std::function<void(VkCommandBuffer)> commandFunction);
 
-    // Átmásol egy buffert egy másikba
 void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 private:
-    // Vulkan "mag" objektumok
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device;
     VkCommandPool commandPool;
 
-    VkPhysicalDeviceFeatures enabledDeviceFeatures = {}; // ÚJ TAGVÁLTOZÓ a kért funkciók tárolására
+    VkPhysicalDeviceFeatures enabledDeviceFeatures = {};
 
-    // Queue-k
     VkQueue graphicsQueue;
     VkQueue presentQueue;
-    QueueFamilyIndices queueIndices; // Eltároljuk a talált indexeket
+    QueueFamilyIndices queueIndices;
 
-    // Validációs rétegek
     const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
     };
 
-    //swapchan setup start extension enable
     const std::vector<const char*> deviceExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
@@ -122,30 +95,21 @@ private:
     void createLogicalDevice(VkSurfaceKHR surface);
     void createCommandPool();
 
-    // Eszköz-választó segédfüggvények
-    // Ellenőrzi, hogy egy fizikai eszköz (GPU) alkalmas-e
     bool isDeviceSuitable(VkPhysicalDevice dev, VkSurfaceKHR surface);
-    // Röviden: ellenőrzi, hogy az adott fizikai eszköz (GPU) támogatja-e az általunk kért eszköz-kiterjesztéseket
     bool checkDeviceExtensionSupport(VkPhysicalDevice dev);
-    //kitöltjük a struktúrát hány családodt akarunk használni és visszaadjuk
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice dev, VkSurfaceKHR surface);
 
-    // Debugger segédfüggvények
     bool checkValidationLayerSupport();
-    // Visszaadja a Vulkan instance-hez szükséges (engedélyezendő) extensionök listáját
     std::vector<const char*> getRequiredExtensions();
     void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 };
 
-//itt ugye drivernek már megmondtuk a createifoban hogy az instance használja de az extension még nincs betöltve cska az engedély van megadva itt betöltjük
-//ez egy proxi/wrapper fügvény ami feladatot tovább adja vagy dinamikusan betölti itt meghívom az origin vulkan fgt plusz logolok vagy hibát hárítok el
 VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance,
     const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
     VkDebugUtilsMessengerEXT* pDebugMessenger);
 
-//ugyanúgy proxi fg betölti a debug felszabadítót
 void DestroyDebugUtilsMessengerEXT(
     VkInstance instance,
     VkDebugUtilsMessengerEXT debugMessenger,
