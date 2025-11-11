@@ -119,7 +119,7 @@ private:
 
     // --- Kamera Állapot ---
     /** @brief A kamera világkoordinátás pozíciója. */
-    glm::vec3 cameraPosition = glm::vec3(2.0f, 2.0f, -4.0f);
+    glm::vec3 cameraPosition = glm::vec3(0, 2, -10.0f);
     /**
      * @brief A kamera mozgási sebessége (méter/másodperc).
      * Használva van a deltaTime-mal a sebességfüggetlen mozgáshoz.
