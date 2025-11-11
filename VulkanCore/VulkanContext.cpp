@@ -229,6 +229,7 @@ void VulkanContext::pickPhysicalDevice(VkSurfaceKHR surface) {
 }
 
 void VulkanContext::createLogicalDevice(VkSurfaceKHR surface) {
+
     // Közvetlenül a tagváltozót használjuk, amit a pickPhysicalDevice elmentett
     QueueFamilyIndices indices = queueIndices;
 
@@ -246,8 +247,21 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface) {
         queueCreateInfos.push_back(queueCreateInfo);
     }
 
-    //jelenleg ürest theát minden érték VK_FALSEal inicializáljuk
-    VkPhysicalDeviceFeatures deviceFeatures{};
+    // JAVÍTÁS: Képességek engedélyezése
+    // Lekérdezzük, hogy a kiválasztott GPU MELYIK feature-öket támogatja
+    VkPhysicalDeviceFeatures supportedFeatures;
+    vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
+
+    // Csak azt a feature-t engedélyezzük, ami a wireframe-hez szükséges, HA támogatott
+    VkPhysicalDeviceFeatures featuresToEnable = {};
+    if (supportedFeatures.fillModeNonSolid) {
+        featuresToEnable.fillModeNonSolid = VK_TRUE;
+    }
+
+    // Eltároljuk a kért funkciókat, amikkel a logikai eszközt inicializáljuk
+    enabledDeviceFeatures = featuresToEnable;
+
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     //megmondja melyik queue familyt akarjuk használni
@@ -256,7 +270,7 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface) {
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
 
     //milyen eszköz funkciókat akarunk használni
-    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.pEnabledFeatures = &enabledDeviceFeatures;
 
     createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
@@ -303,6 +317,8 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice dev, VkSurfaceKHR surface)
     // Ellenőrzi, hogy a GPU támogatja-e a szükséges extension-öket (pl. VK_KHR_swapchain)
     bool extensionsSupported = checkDeviceExtensionSupport(dev);
 
+
+
     // Swap chain megfelelőséget csak akkor ellenőrizzük, ha az extension elérhető
     bool swapChainAdequate = false;
     if (extensionsSupported)
@@ -313,8 +329,14 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice dev, VkSurfaceKHR surface)
         swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
     }
 
+    // JAVÍTÁS: Wireframe feature ellenőrzése
+    VkPhysicalDeviceFeatures supportedFeatures;
+    vkGetPhysicalDeviceFeatures(dev, &supportedFeatures);
+
+    bool featuresAdequate = supportedFeatures.fillModeNonSolid; // A kulcs!
+
     // GPU csak akkor alkalmas, ha minden kritérium teljesül
-    return indices.isComplete() && extensionsSupported && swapChainAdequate;
+    return indices.isComplete() && extensionsSupported && swapChainAdequate && featuresAdequate;
 }
 
 //kitöltjük a struktúrát hány családodt akarunk használni és visszaadjuk

@@ -84,7 +84,7 @@ public:
     void executeSingleTimeCommands(std::function<void(VkCommandBuffer)> commandFunction);
 
     // Átmásol egy buffert egy másikba
-    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 private:
     // Vulkan "mag" objektumok
     VkInstance instance;
@@ -92,6 +92,8 @@ private:
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device;
     VkCommandPool commandPool;
+
+    VkPhysicalDeviceFeatures enabledDeviceFeatures = {}; // ÚJ TAGVÁLTOZÓ a kért funkciók tárolására
 
     // Queue-k
     VkQueue graphicsQueue;

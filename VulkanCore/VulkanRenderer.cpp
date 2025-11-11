@@ -1,12 +1,12 @@
 // VulkanCore/VulkanRenderer.cpp
 #include "VulkanRenderer.h"
-#include <stdexcept> // A std::runtime_error használatához
+#include <stdexcept>
 
-#define GLM_FORCE_RADIANS // Fontos a Vulkan-kompatibilis forgatáshoz
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp> // a glm::rotate-hoz és lookAt-hoz
-#include <chrono> // az időalapú forgáshoz
-#include <array> // A clearValues-hez
+#include <glm/gtc/matrix_transform.hpp>
+#include <chrono>
+#include <array>
 
 using namespace std;
 
@@ -32,8 +32,8 @@ void VulkanRenderer::cleanup() {
     }
 }
 
-// MÓDOSÍTVA: Szignatúra frissítve
-void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipeline, VkBuffer vertexBuffer, glm::vec3 cameraPosition) {
+// JAVÍTVA: Szignatúra frissítve (eltűnt a VkBuffer)
+void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipeline, glm::vec3 cameraPosition, const std::vector<MeshObject*>& objects) {
     vkWaitForFences(context->getDevice(), 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex;
@@ -54,7 +54,8 @@ void VulkanRenderer::drawFrame(VulkanSwapchain* swapchain, VulkanPipeline* pipel
     vkResetFences(context->getDevice(), 1, &inFlightFences[currentFrame]);
 
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-    recordCommandBuffer(commandBuffers[currentFrame], imageIndex, swapchain, pipeline, vertexBuffer, cameraPosition);
+    // JAVÍTVA: Hívás frissítve
+    recordCommandBuffer(commandBuffers[currentFrame], imageIndex, swapchain, pipeline, cameraPosition, objects);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -131,9 +132,9 @@ void VulkanRenderer::createSyncObjects(VulkanSwapchain* swapchain)
     }
 }
 
-// MÓDOSÍTVA: Szignatúra frissítve + felesleges kód törölve
-void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, VulkanSwapchain* swapchain, VulkanPipeline* pipeline, VkBuffer vertexBuffer, glm::vec3 cameraPosition) {
-    // JAVÍTVA: beginInfo deklarációja
+// JAVÍTVA: Szignatúra frissítve + rajzolási logika behelyezve a MeshObject.draw()-ba
+void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, VulkanSwapchain* swapchain, VulkanPipeline* pipeline, glm::vec3 cameraPosition, const std::vector<MeshObject*>& objects) {
+
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -142,6 +143,20 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     }
 
     VkExtent2D extent = swapchain->getExtent();
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(extent.width);
+    viewport.height = static_cast<float>(extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = extent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
     // 1. Definiáljuk a törlési értékeket (Color és Depth)
     std::array<VkClearValue, 2> clearValues{};
@@ -158,6 +173,8 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // Alapértelmezett pipeline kötése (FILL)
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getGraphicsPipeline());
 
     // 1. Időalapú forgás kiszámítása
@@ -165,66 +182,42 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    // --- MVP SZÁMÍTÁS (CSAK EGYSZER) ---
+    // --- VP (View Projection) SZÁMÍTÁS ---
 
     // Projection (Vetorítés)
     const float aspectRatio = (float)extent.width / (float)extent.height;
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
 
-    // View (Kamera) - HASZNÁLJA A KAPOTT cameraPosition-t
-    // 1. Definiáljuk a kamera "előre" nézési vektorát (pl. a 0,0,0-ra nézve)
-    // Mivel a kamera Z=-4-nél van, a nézési vektor a Z pozitív irányába mutat.
-    // De a View mátrix a kamerát fordítja, így a célpontot kell elmozdítani a pozícióval.
-    glm::vec3 cameraDirection = glm::vec3(0.0f, 0.0f, 1.0f); // Nézzen a Z+ irányba
-
-    // 2. A View mátrix kiszámítása
-    // A center (célpont) most a kamera pozíciója + a nézési vektor
+    // View (Kamera)
+    glm::vec3 cameraDirection = glm::vec3(0.0f, 0.0f, 1.0f);
     glm::vec3 center = cameraPosition + cameraDirection;
-    glm::vec3 up = glm::vec3(0.0f, -1.0f, 0.0f); // A Vulkan szabványos "Fel" vektora
+    glm::vec3 up = glm::vec3(0.0f, -1.0f, 0.0f);
+    glm::mat4 view = glm::lookAt(cameraPosition, center, up);
 
-    // Most a lookAt() a kamera pozíciójából a pozíciója + irány vektor felé néz,
-    // ami fix nézési irányt eredményez, függetlenül az origótól.
-    glm::mat4 view = glm::lookAt(cameraPosition, center, up); // <-- EZ A CÉL
-    // Model (Forgatás)
-    glm::mat4 model = glm::mat4(1.0f);
-    model = glm::rotate(model, time * glm::radians(40.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 viewProjection = projection * view;
 
 
+    // --- OBJEKTUMOK RAJZOLÁSA CIKLUSBAN ---
+    for (size_t i = 0; i < objects.size(); ++i) {
+        const auto& object = objects[i];
 
-    // Végső MVP
-    glm::mat4 mvp = projection * view * model;
+        // CUBE-hoz (index 1) megkötjük a Wireframe Pipeline-t
+        if (i == 1) {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getWireframePipeline());
+        } else {
+            // A többihez (torus, pyramid) a normál pipeline-t kötjük
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getGraphicsPipeline());
+        }
 
-    // 3. Mátrix "pusholása" a shaderbe
-    vkCmdPushConstants(
-        commandBuffer,
-        pipeline->getPipelineLayout(),
-        VK_SHADER_STAGE_VERTEX_BIT,
-        0,
-        sizeof(mvp),
-        &mvp
-    );
+        // A MeshObject végzi a Push Constant feltöltést, buffer kötést és vkCmdDraw hívást
+        object->draw(commandBuffer, pipeline->getPipelineLayout(), time, viewProjection, i == 1);
+    }
+    // --- CIKLUS VÉGE ---
 
-    // --- ÚJ: VERTEX BUFFER KÖTÉSE ---
-    VkBuffer vertexBuffers[] = {vertexBuffer};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(extent.width);
-    viewport.height = static_cast<float>(extent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = extent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    // Rajzoljuk a kockát
-    vkCmdDraw(commandBuffer, cubeVertexCount, 1, 0, 0);
+    // Eltávolítva a régi vkCmdDraw hívás, azt már a MeshObject.draw() csinálja
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

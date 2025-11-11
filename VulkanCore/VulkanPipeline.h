@@ -11,7 +11,6 @@ public:
     ~VulkanPipeline();
 
     // Fő inicializáló és törlő metódusok
-    // MÓDOSÍTVA: Átadjuk a depth buffer adatait
     void create(VulkanContext* context, VulkanSwapchain* swapchain, VkImageView depthImageView, VkFormat depthFormat);
     void cleanup();
 
@@ -19,6 +18,7 @@ public:
     VkRenderPass getRenderPass() const { return renderPass; }
     VkPipelineLayout getPipelineLayout() const { return pipelineLayout; }
     VkPipeline getGraphicsPipeline() const { return graphicsPipeline; }
+    VkPipeline getWireframePipeline() const { return wireframePipeline; } // ÚJ GETTER
     VkFramebuffer getFramebuffer(uint32_t index) const { return swapChainFramebuffers[index]; }
 
 private:
@@ -26,6 +26,7 @@ private:
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
+    VkPipeline wireframePipeline; // ÚJ TAGVÁLTOZÓ
     std::vector<VkFramebuffer> swapChainFramebuffers;
 
     // --- Függőségek ---
@@ -34,14 +35,14 @@ private:
     // --- Privát segédfüggvények (áthelyezve a main.cpp-ből) ---
 
     // Létrehozza a Render Pass-t
-    // MÓDOSÍTVA: Megkapja a depth formátumot
     void createRenderPass(VkFormat swapchainFormat, VkFormat depthFormat);
 
-    // Létrehozza a teljes grafikus pipeline-t (shaderekkel, beállításokkal)
+    // Létrehozza a teljes grafikus pipeline-t (kitöltött mód)
     void createGraphicsPipeline();
+    // Létrehozza a drótvázas pipeline-t (VK_POLYGON_MODE_LINE)
+    void createWireframePipeline(); // ÚJ DEKLARÁCIÓ
 
     // Létrehozza a framebuffer-eket a swapchain image view-jaihoz
-    // MÓDOSÍTVA: Megkapja a depth view-t
     void createFramebuffers(VulkanSwapchain* swapchain, VkImageView depthImageView);
 
     // Beolvas egy fájlt (pl. shader) binárisan

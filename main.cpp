@@ -9,6 +9,7 @@
 #include <map>
 #include <chrono> // <- IDŐMÉRÉSHEZ
 #include <cmath> // A math.h függvényekhez
+#include <iterator> // std::size-hoz
 
 // GLM include-ok
 #define GLM_FORCE_RADIANS
@@ -21,15 +22,31 @@
 #include "VulkanCore/VulkanSwapchain.h"
 #include "VulkanCore/VulkanPipeline.h"
 #include "VulkanCore/VulkanRenderer.h"
+#include "VulkanCore/MeshObject.h" // A saját objektum osztályunk
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 using namespace std;
 
-// A torus adatai
-static constexpr float g_cubeVertices[] = {
-    #include "./Modells/Datas/torus.inc"
-};
+// Segédfüggvény: Ideiglenes vertex tömbök a modellek inc fájlokból
+namespace ModelData {
+    // 1. Torus (Mozgó, Kitöltött) - Ez az egyetlen, ami a kódodban jelenleg létező fájlra hivatkozik
+    static constexpr float torusVertices[] = {
+        #include "./Modells/Datas/torus.inc"
+    };
+
+    // 2. Kocka (Statikus, Wireframe)
+    // IDEIGLENESEN: Torus adatok használata (amíg nincs cube.inc)
+    static constexpr float icoVertices[] = {
+        #include "./Modells/Datas/ico.inc"
+    };
+
+    // 3. Piramis (Mozgó, Kitöltött)
+    // IDEIGLENESEN: Torus adatok használata (amíg nincs pyramid.inc)
+    static constexpr float pyramidVertices[] = {
+        #include "./Modells/Datas/cone.inc"
+    };
+}
 
 
 class HelloTriangleApplication
@@ -68,13 +85,18 @@ private:
     // --- Alkalmazás-specifikus objektumok ---
     VkSurfaceKHR surface;
 
-    // --- 3D Erőforrások ---
-    VkBuffer vertexBuffer;
-    VkDeviceMemory vertexBufferMemory;
+    // --- 3D Erőforrások (Depth) ---
     VkImage depthImage;
     VkDeviceMemory depthImageMemory;
     VkImageView depthImageView;
     VkFormat depthFormat;
+
+    // TÖRÖLVE a régi: VkBuffer vertexBuffer és VkDeviceMemory vertexBufferMemory
+
+    // --- ÚJ: Objektumok ---
+    MeshObject torus;
+    MeshObject cube;    // Wireframe alakzat (objektum lista 1. indexe)
+    MeshObject pyramid; // Másik mozgó alakzat
 
     // --- Static Callback a GLFW-hez (a C++ osztályon BELÜL) ---
     static void staticKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -97,35 +119,31 @@ private:
 
     // --- Core segédfüggvények ---
 
-    void createVertexBuffer() {
-        VkDeviceSize bufferSize = sizeof(g_cubeVertices);
+    // A régi createVertexBuffer() helyett
+    void createObjects() {
+        // 1. Torus (Mozgó, Kitöltött) - Ez volt az eredeti működő
+        // A vektor inicializálása iteratorral
+        std::vector<float> torusVector(std::begin(ModelData::torusVertices), std::end(ModelData::torusVertices));
+        torus.create(&vulkanContext, torusVector);
+        torus.position = glm::vec3(-3.0f, 0.0f, 0.0f);
+        torus.rotationAxis = glm::vec3(0.0f, 1.0f, 0.0f);
+        torus.rotationSpeed = 40.0f;
 
-        // A többi Vulkan kód a VulkanContext.cpp-ben van.
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        vulkanContext.createBuffer(
-            bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            stagingBuffer,
-            stagingBufferMemory
-        );
+        // 2. Kocka (Statikus, Wireframe)
+        // JAVÍTVA: Explicit pointer aritmetika (stabilabb C-stílusú tömbökkel)
+        std::vector<float> cubeVector(std::begin(ModelData::icoVertices), std::end(ModelData::icoVertices));
+        cube.create(&vulkanContext, cubeVector);
+        cube.position = glm::vec3(3.0f, 0.0f, 0.0f);
+        cube.rotationSpeed = 0.0f;
 
-        void* data;
-        vkMapMemory(vulkanContext.getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
-        memcpy(data, g_cubeVertices, (size_t)bufferSize);
-        vkUnmapMemory(vulkanContext.getDevice(), stagingBufferMemory);
-
-        vulkanContext.createBuffer(
-            bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            vertexBuffer,
-            vertexBufferMemory
-        );
-        vulkanContext.copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
-        vkDestroyBuffer(vulkanContext.getDevice(), stagingBuffer, nullptr);
-        vkFreeMemory(vulkanContext.getDevice(), stagingBufferMemory, nullptr);
+        // 3. Piramis (Mozgó, Kitöltött)
+        // JAVÍTVA: Explicit pointer aritmetika
+        const size_t pyramidSize = sizeof(ModelData::pyramidVertices) / sizeof(ModelData::pyramidVertices[0]);
+        std::vector<float> pyramidVector(std::begin(ModelData::pyramidVertices), std::end(ModelData::pyramidVertices));
+        pyramid.create(&vulkanContext, pyramidVector);
+        pyramid.position = glm::vec3(0.0f, 3.0f, 0.0f);
+        pyramid.rotationAxis = glm::vec3(1.0f, 0.0f, 0.0f);
+        pyramid.rotationSpeed = 60.0f;
     }
 
     void createDepthResources() {
@@ -187,11 +205,10 @@ private:
         vulkanContext.initDevice(surface);
         vulkanSwapchain.create(&vulkanContext, surface, window);
         createDepthResources();
-        createVertexBuffer();
 
-        // JAVÍTVA: A VulkanPipeline create hívása helyes
+        createObjects();
+
         vulkanPipeline.create(&vulkanContext, &vulkanSwapchain, depthImageView, depthFormat);
-        // JAVÍTVA: A VulkanRenderer create hívása helyes
         vulkanRenderer.create(&vulkanContext, &vulkanSwapchain);
     }
 
@@ -200,7 +217,7 @@ private:
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan Torus", nullptr, nullptr);
+        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan Multi Object", nullptr, nullptr);
     }
 
     void mainLoop()
@@ -238,8 +255,11 @@ private:
             if (keysPressed[GLFW_KEY_F])
                 cameraPosition.y -= velocity;
 
+            // Objektumok listája: a sorrend fontos! (1. index a wireframe)
+            std::vector<MeshObject*> objects = {&torus, &cube, &pyramid};
 
-            vulkanRenderer.drawFrame(&vulkanSwapchain, &vulkanPipeline, vertexBuffer, cameraPosition);
+            // JAVÍTVA: drawFrame hívás frissítve
+            vulkanRenderer.drawFrame(&vulkanSwapchain, &vulkanPipeline, cameraPosition, objects);
         }
 
         vkDeviceWaitIdle(vulkanContext.getDevice());
@@ -251,12 +271,14 @@ private:
         vulkanPipeline.cleanup();
         vulkanSwapchain.cleanup();
 
+        // Objektumok felszabadítása
+        torus.cleanup(vulkanContext.getDevice());
+        cube.cleanup(vulkanContext.getDevice());
+        pyramid.cleanup(vulkanContext.getDevice());
+
         vkDestroyImageView(vulkanContext.getDevice(), depthImageView, nullptr);
         vkDestroyImage(vulkanContext.getDevice(), depthImage, nullptr);
         vkFreeMemory(vulkanContext.getDevice(), depthImageMemory, nullptr);
-
-        vkDestroyBuffer(vulkanContext.getDevice(), vertexBuffer, nullptr);
-        vkFreeMemory(vulkanContext.getDevice(), vertexBufferMemory, nullptr);
 
         vkDestroySurfaceKHR(vulkanContext.getInstance(), surface, nullptr);
         vulkanContext.cleanup();

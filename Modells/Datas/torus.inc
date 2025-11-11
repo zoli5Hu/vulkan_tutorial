@@ -1,4 +1,4 @@
-#pragma once
+
 // Ez a fájl 36 csúcspontot definiál (6 oldal * 2 háromszög * 3 csúcs)
 // Minden csúcspont 5 floatból áll:
 // Pozíció (X, Y, Z), Textúra koordináta (U, V)
