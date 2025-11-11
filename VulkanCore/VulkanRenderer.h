@@ -36,7 +36,7 @@ public:
      * Ez biztosítja, hogy a CPU legfeljebb ennyi képkockával járjon a GPU előtt,
      * elkerülve az erőforrások túlterhelését.
      */
-    const int MAX_FRAMES_IN_FLIGHT = 2;
+    const int MAX_FRAMES_IN_FLIGHT = 3;
 
     /**
      * @brief Létrehozza a renderelőhöz szükséges erőforrásokat (parancspufferek, szinkronizációs objektumok).
