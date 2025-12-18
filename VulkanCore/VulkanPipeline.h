@@ -65,6 +65,8 @@ public:
      */
     VkFramebuffer getFramebuffer(uint32_t index) const { return swapChainFramebuffers[index]; }
 
+    // ÚJ: Getter a descriptor set layout-hoz (kelleni fog a Texture létrehozásánál)
+    VkDescriptorSetLayout getDescriptorSetLayout() const { return descriptorSetLayout; }
 private:
     /** @brief A Render Pass objektum (meghatározza a csatolmányokat és al-lépéseket). */
     VkRenderPass renderPass;
@@ -79,6 +81,9 @@ private:
 
     /** @brief Mutató a központi Vulkan környezetre. */
     VulkanContext* context;
+
+    // ÚJ: A layout leírója
+    VkDescriptorSetLayout descriptorSetLayout;
 
     // --- Privát inicializáló segédfüggvények ---
 

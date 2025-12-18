@@ -68,6 +68,8 @@ add_executable(foobar
         VulkanCore/VulkanRenderer.h
         VulkanCore/MeshObject.cpp
         VulkanCore/MeshObject.h
+        VulkanCore/Texture.h
+        VulkanCore/Texture.cpp
 )
 add_dependencies(foobar CompileShaders)
 

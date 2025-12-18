@@ -28,6 +28,8 @@ public:
      */
     ~MeshObject();
 
+    void setTexture(VkDescriptorSet ds) { this->textureDescriptorSet = ds; }
+
     /**
      * @brief Létrehozza a MeshObject Vulkan erőforrásait.
      *
@@ -57,8 +59,7 @@ public:
      * @param viewProjection A már kiszámított nézeti-vetítési (View * Projection) mátrix.
      * @param isWireframe Logikai érték, ami jelzi, hogy wireframe-ként rajzolódik-e (logikailag kezelt a rendererben).
      */
-    void draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, float animationTime, const glm::mat4& viewProjection, bool isWireframe) const;
-
+    void draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, float animationTime, const glm::mat4& viewProjection) const;
     // --- Objektum Transzformációs Állapot ---
 
     /** @brief Az objektum világkoordinátás pozíciója (alapértelmezett: origó). */
@@ -71,6 +72,7 @@ public:
     float rotationSpeed = 0.0f;
 private:
     // --- Vulkan Geometria Erőforrások ---
+    VkDescriptorSet textureDescriptorSet = VK_NULL_HANDLE; // ÚJ
 
     /** @brief A Vulkan Vertex Puffer leírója. */
     VkBuffer vertexBuffer = VK_NULL_HANDLE;

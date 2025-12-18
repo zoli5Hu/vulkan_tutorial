@@ -1,9 +1,13 @@
 #version 450
 
-layout(location = 0) in vec3 in_color;
+layout(location = 0) in vec2 frag_texCoord;
 
 layout(location = 0) out vec4 out_color;
 
+// Binding 0: A textúra sampler
+layout(binding = 0) uniform sampler2D texSampler;
+
 void main() {
-    out_color = vec4(in_color, 1.0f);
+    // Minta vételezése a textúrából
+    out_color = texture(texSampler, frag_texCoord);
 }

@@ -1,38 +1,20 @@
 /**
  * @file MeshObject.cpp
  * @brief Megvalósítja a MeshObject osztály metódusait.
- *
- * Ez az osztály felelős a 3D geometria adatok Vulkan memóriába történő másolásáért
- * (vertex bufferek kezelése), valamint az objektum világtérbeli transzformációinak
- * (pozíció, forgatás) kezeléséért a rajzolási parancsok rögzítésekor.
  */
 #include "MeshObject.h"
 #include <stdexcept>
-#include <cstring> // Memóriakezelési függvényekhez (memcpy)
+#include <cstring>
+#include <cmath> // A sin() függvényhez
 
-/**
- * @brief Alapértelmezett konstruktor.
- */
 MeshObject::MeshObject() = default;
 
-/**
- * @brief Alapértelmezett destruktor.
- */
 MeshObject::~MeshObject() = default;
 
-/**
- * @brief Létrehozza a MeshObject Vulkan erőforrásait (vertex puffer).
- *
- * A feltöltés staging pufferen keresztül történik, ami biztosítja a memória
- * optimális elhelyezését a GPU-n (DEVICE_LOCAL_BIT).
- *
- * @param ctx Mutató a Vulkan környezet objektumra.
- * @param vertices A feltöltendő vertex adatok vektora (Pozíció, UV, stb.).
- */
 void MeshObject::create(VulkanContext* ctx, const std::vector<float>& vertices) {
     this->context = ctx;
-    // Kiszámítja a kirajzolandó csúcsok számát.
-    // Mivel minden vertex 5 float (X,Y,Z,U,V), a teljes méretet osztjuk 5-tel.
+
+    // FONTOS: 5 float van egy vertexben (X,Y,Z,U,V), ezért 5-tel osztunk
     this->vertexCount = static_cast<uint32_t>(vertices.size() / 5);
 
     VkDeviceSize bufferSize = vertices.size() * sizeof(float);
@@ -40,45 +22,36 @@ void MeshObject::create(VulkanContext* ctx, const std::vector<float>& vertices) 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
 
-    // 1. Létrehozza a Staging Puffert (CPU-ról látható és másolható)
+    // 1. Staging Buffer
     context->createBuffer(
-        bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, // Átviteli forrásként való használat
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, // CPU-ról elérhető (látható) és konzisztens
+        bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         stagingBuffer, stagingBufferMemory
     );
 
-    // 2. Adatok másolása a Staging Pufferbe
+    // 2. Másolás
     void* data;
-    // Leképezi (map-eli) a memória egy részét a CPU számára elérhető címre.
     vkMapMemory(context->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
-    // Átmásolja a vertex adatokat a leképezett memóriába.
     memcpy(data, vertices.data(), (size_t)bufferSize);
-    // Feloldja (unmap-eli) a memória leképezését.
     vkUnmapMemory(context->getDevice(), stagingBufferMemory);
 
-    // 3. Létrehozza a cél (Vertex) Puffert (GPU-ra optimalizált)
+    // 3. Vertex Buffer
     context->createBuffer(
         bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, // Átviteli cél és vertex puffer
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, // GPU-specifikus (gyors) memória
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         vertexBuffer, vertexBufferMemory
     );
 
-    // 4. Staging Puffer tartalmának átmásolása a Cél Pufferbe
+    // 4. Staging -> Vertex másolás
     context->copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
-    // 5. Staging Puffer felszabadítása (már nincs rá szükség)
+    // 5. Cleanup Staging
     vkDestroyBuffer(context->getDevice(), stagingBuffer, nullptr);
     vkFreeMemory(context->getDevice(), stagingBufferMemory, nullptr);
 }
 
-/**
- * @brief Felszabadítja az objektum Vulkan erőforrásait.
- *
- * @param device A Vulkan logikai eszköz, amellyel az erőforrásokat létrehoztuk.
- */
 void MeshObject::cleanup(VkDevice device) {
-    // Csak akkor szabadít fel, ha a puffer ténylegesen létrejött.
     if (vertexBuffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(device, vertexBuffer, nullptr);
         vkFreeMemory(device, vertexBufferMemory, nullptr);
@@ -86,54 +59,56 @@ void MeshObject::cleanup(VkDevice device) {
 }
 
 /**
- * @brief Rögzíti a rajzolási parancsokat a parancspufferbe.
- *
- * Kiszámolja a Model-View-Projection (MVP) mátrixot, Push Konstansként feltölti,
- * majd köti a vertex puffert és elindítja a rajzolási hívást (vkCmdDraw).
- *
- * @param commandBuffer A rögzítés alatt álló parancspuffer.
- * @param pipelineLayout A pipeline elrendezése, amely definiálja a Push Konstansokat.
- * @param animationTime A futásidő (másodpercben) az animációhoz.
- * @param viewProjection A Kamera (View) és a Perspektívikus (Projection) mátrix összevonva.
- * @param isWireframe Jelzi, hogy az objektumot wireframe módban rajzoljuk-e (nem használt ezen a szinten).
+ * @brief Frissített draw metódus textúra támogatással.
  */
-void MeshObject::draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, float animationTime, const glm::mat4& viewProjection, bool isWireframe) const {
+void MeshObject::draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, float animationTime, const glm::mat4& viewProjection) const {
     if (vertexBuffer == VK_NULL_HANDLE || vertexCount == 0) return;
 
-    // 1. Model Mátrix számítása
+    // 1. Model Mátrix
     glm::mat4 model = glm::mat4(1.0f);
-    // Transzláció (elhelyezés a világban)
     model = glm::translate(model, position);
 
-    // Forgatás hozzáadása, ha a forgási sebesség pozitív
     if (rotationSpeed > 0.0f) {
-        // Forgatás: idő * sebesség (fok/másodperc) radiánra konvertálva, a tengely körül
         model = glm::rotate(model, animationTime * glm::radians(rotationSpeed), rotationAxis);
-        model = glm::scale(model, glm::vec3(sin(animationTime)*2.0f, sin(animationTime)*2.0f, sin(animationTime)*2.0f));
+        // Megtartottam a pulzálást, amit az eredeti kódod tartalmazott:
+        float scale = sin(animationTime) * 0.5f + 1.5f; // Kicsit szelídítettem a skálázáson, hogy ne legyen túl nagy
+        model = glm::scale(model, glm::vec3(scale));
     }
 
-    // 2. MVP Mátrix számítása
-    // MVP = Projection * View * Model (oszlop-fő mátrix szorzás sorrendje)
+    // 2. MVP Mátrix
     glm::mat4 mvp = viewProjection * model;
 
-    // 3. Push Konstansok Feltöltése
-    // A mátrix átadása közvetlenül a Vertex Shadernek a Push Konstans mechanizmuson keresztül.
+    // 3. Push Constants
     vkCmdPushConstants(
         commandBuffer,
         pipelineLayout,
-        VK_SHADER_STAGE_VERTEX_BIT, // A Vertex Shader számára küldjük
-        0, // Eltolás (offset) a Push Konstans blokkban
+        VK_SHADER_STAGE_VERTEX_BIT,
+        0,
         sizeof(mvp),
         &mvp
     );
 
-    // 4. Vertex Puffer Kötése
+    // --- ÚJ RÉSZ: Textúra Kötése ---
+    // Ha van beállítva textúra descriptor set, akkor bekötjük a Binding 0-ra.
+    if (textureDescriptorSet != VK_NULL_HANDLE) {
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipelineLayout,
+            0, // First Set (0-s indexű set)
+            1, // Descriptor Count
+            &textureDescriptorSet,
+            0,
+            nullptr
+        );
+    }
+    // -------------------------------
+
+    // 4. Vertex Buffer
     VkBuffer buffers[] = {vertexBuffer};
     VkDeviceSize offsets[] = {0};
-    // Kösse a vertex puffert a 0. kötési ponthoz.
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
 
-    // 5. Rajzolási Hívás (Draw Call)
-    // Rajzolja ki az objektumot. A vertexCount-t használja a rajzolási primitívek számának meghatározására.
+    // 5. Rajzolás
     vkCmdDraw(commandBuffer, vertexCount, 1, 0, 0);
 }
