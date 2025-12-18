@@ -129,7 +129,6 @@ void VulkanPipeline::createGraphicsPipeline()
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
     // --- 1. Vertex Input Frissítése (X,Y,Z,U,V) ---
-    // 5 float vertexenként: X, Y, Z (Pozíció) + U, V (Textúra)
     const size_t g_vertexSize = sizeof(float) * 5;
 
     VkVertexInputBindingDescription bindingInfo = {
@@ -146,11 +145,11 @@ void VulkanPipeline::createGraphicsPipeline()
     attributeInfos[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
     attributeInfos[0].offset   = 0;
 
-    // 1. UV Koordináták (vec2) - ÚJ!
+    // 1. UV Koordináták (vec2)
     attributeInfos[1].location = 1;
     attributeInfos[1].binding  = 0;
     attributeInfos[1].format   = VK_FORMAT_R32G32_SFLOAT;
-    attributeInfos[1].offset   = 3 * sizeof(float); // A pozíció (3 float) után kezdődik
+    attributeInfos[1].offset   = 3 * sizeof(float);
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -169,14 +168,20 @@ void VulkanPipeline::createGraphicsPipeline()
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
+    // --- 2. Raszterizáló (Rasterizer) Beállítása ---
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+    // CULLING BEÁLLÍTÁSOK
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Hátlapok eldobása
+    // JAVÍTÁS: Mivel a projection Y tengelye fordított (-1), a háromszögek iránya is megfordult.
+    // Ezért a CLOCKWISE (óramutatóval egyező) lesz az előlap.
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -210,14 +215,13 @@ void VulkanPipeline::createGraphicsPipeline()
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
 
-    // --- 2. Descriptor Set Layout Létrehozása (Textúrához) ---
-    // Ez mondja meg a pipeline-nak, hogy binding = 0 alatt egy Sampler lesz
+    // --- Descriptor Set Layout (Textúra) ---
     VkDescriptorSetLayoutBinding samplerLayoutBinding{};
     samplerLayoutBinding.binding = 0;
     samplerLayoutBinding.descriptorCount = 1;
     samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     samplerLayoutBinding.pImmutableSamplers = nullptr;
-    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Csak fragment shader látja
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -228,7 +232,7 @@ void VulkanPipeline::createGraphicsPipeline()
         throw std::runtime_error("failed to create descriptor set layout!");
     }
 
-    // --- 3. Pipeline Layout Frissítése ---
+    // --- Pipeline Layout ---
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pushConstantRange.offset = 0;
@@ -236,8 +240,8 @@ void VulkanPipeline::createGraphicsPipeline()
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1; // Most már van egy Descriptor Set Layout
-    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout; // Itt adjuk át
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -271,10 +275,6 @@ void VulkanPipeline::createGraphicsPipeline()
 
 void VulkanPipeline::createWireframePipeline()
 {
-    // A kódot egyszerűsítve: gyakorlatilag lemásoljuk a graphics pipeline beállításait,
-    // de a raszterizálót LINE módra állítjuk.
-    // FONTOS: A Vertex Inputnak itt is egyeznie kell a shaderekkel!
-
     auto vertShaderCode = readFile("shaders/vert.spv");
     auto fragShaderCode = readFile("shaders/frag.spv");
 
@@ -295,7 +295,6 @@ void VulkanPipeline::createWireframePipeline()
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-    // Vertex Input (Ugyanaz mint a solidnál!)
     const size_t g_vertexSize = sizeof(float) * 5;
     VkVertexInputBindingDescription bindingInfo = { 0, (uint32_t)g_vertexSize, VK_VERTEX_INPUT_RATE_VERTEX };
 
@@ -320,15 +319,16 @@ void VulkanPipeline::createWireframePipeline()
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
-    // KÜLÖNBSÉG: POLYGON_MODE_LINE
+    // KÜLÖNBSÉG: POLYGON_MODE_LINE + JAVÍTOTT CULLING
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_LINE; // <-- ITT A LÉNYEG
+    rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    // JAVÍTÁS ITT IS:
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -373,7 +373,7 @@ void VulkanPipeline::createWireframePipeline()
     pipelineInfo.pDepthStencilState = &depthStencilState;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pipelineLayout; // Ugyanaz a layout (Descriptor Set Layouttal)
+    pipelineInfo.layout = pipelineLayout;
     pipelineInfo.renderPass = renderPass;
     pipelineInfo.subpass = 0;
 
