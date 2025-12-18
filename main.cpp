@@ -76,6 +76,13 @@ namespace ModelData {
     static constexpr float pyramidVertices[] = {
         #include "./Modells/Datas/cone.inc"
     };
+
+    // 4. Piramis (Mozgó, Kitöltött)
+    // IDEIGLENESEN: A Cone (cone.inc) adatai vannak használva a Piramishoz.
+    /** @brief A kúp (cone, ideiglenes piramis) vertex adatai. */
+    static constexpr float n_v[] = {
+        #include "./Modells/Datas/cone.inc"
+    };
 }
 
 /**
@@ -154,6 +161,8 @@ private:
     /** @brief A harmadik mozgó MeshObject (Cone/Piramis). */
     MeshObject pyramid; // Másik mozgó alakzat
 
+    MeshObject n;
+
     // --- Static Callback a GLFW-hez (a C++ osztályon BELÜL) ---
     /**
      * @brief Statikus callback függvény a billentyűzet események kezelésére.
@@ -206,12 +215,20 @@ private:
 
         // 3. Piramis (Cone) inicializálása
         // Méret ellenőrzés (a kódban maradt, de az iteratoros inicializálás mellett opcionális)
-        const size_t pyramidSize = sizeof(ModelData::pyramidVertices) / sizeof(ModelData::pyramidVertices[0]);
         std::vector<float> pyramidVector(std::begin(ModelData::pyramidVertices), std::end(ModelData::pyramidVertices));
         pyramid.create(&vulkanContext, pyramidVector);
         pyramid.position = glm::vec3(0.0f, 3.0f, 0.0f);
         pyramid.rotationAxis = glm::vec3(1.0f, 0.0f, 0.0f);
         pyramid.rotationSpeed = 60.0f; // Mozgás engedélyezése
+
+        // 4 iramis (Cone) inicializálása
+        // Méret ellenőrzés (a kódban maradt, de az iteratoros inicializálás mellett opcionális)
+        std::vector<float> n_ve(std::begin(ModelData::n_v), std::end(ModelData::n_v));
+        n.create(&vulkanContext, n_ve);
+        n.position = glm::vec3(0.0f, -3.0f, 0.0f);
+        n.rotationAxis = glm::vec3(0.0f, 1.0f, 0.0f);
+
+        n.rotationSpeed = 90.0f; // Mozgás engedélyezése
     }
 
     /**
@@ -355,7 +372,7 @@ private:
 
             // Objektumok listája: a sorrend fontos! (1. index a wireframe)
             // A Wireframe objektum a 1. indexen van (cube), a renderer ezt használja a pipeline váltására.
-            std::vector<MeshObject*> objects = {&torus, &cube, &pyramid};
+            std::vector<MeshObject*> objects = {&torus, &cube, &pyramid, &n};
 
             // JAVÍTVA: drawFrame hívás frissítve
             // Kezdeményezi az aktuális keret kirajzolását.
@@ -384,6 +401,7 @@ private:
         torus.cleanup(vulkanContext.getDevice());
         cube.cleanup(vulkanContext.getDevice());
         pyramid.cleanup(vulkanContext.getDevice());
+        n.cleanup(vulkanContext.getDevice());
 
         // Mélységi erőforrások felszabadítása
         vkDestroyImageView(vulkanContext.getDevice(), depthImageView, nullptr);

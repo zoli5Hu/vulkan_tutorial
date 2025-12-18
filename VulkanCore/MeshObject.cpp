@@ -109,6 +109,7 @@ void MeshObject::draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLa
     if (rotationSpeed > 0.0f) {
         // Forgatás: idő * sebesség (fok/másodperc) radiánra konvertálva, a tengely körül
         model = glm::rotate(model, animationTime * glm::radians(rotationSpeed), rotationAxis);
+        model = glm::scale(model, glm::vec3(sin(animationTime)*2.0f, sin(animationTime)*2.0f, sin(animationTime)*2.0f));
     }
 
     // 2. MVP Mátrix számítása
