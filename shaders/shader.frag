@@ -1,64 +1,90 @@
 #version 450
 
+// --- BEMENETEK ---
 layout(location = 0) in vec3 fragPos;
 layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec2 fragTexCoord;
+layout(location = 3) in vec4 fragPosLightSpace;
 
+// --- KIMENET ---
 layout(location = 0) out vec4 outColor;
 
-layout(binding = 0) uniform sampler2D diffuseSampler;
-layout(binding = 1) uniform sampler2D roughnessSampler;
+// --- TEXTÚRÁK ---
+layout(set = 0, binding = 0) uniform sampler2D diffuseSampler;
+layout(set = 0, binding = 1) uniform sampler2D roughnessSampler;
+layout(set = 1, binding = 0) uniform sampler2D shadowMap;
 
-void main() {
-    // 1. Alapszín
-    vec3 objectColor = texture(diffuseSampler, fragTexCoord).rgb;
+// --- ÁRNYÉK SZÁMÍTÁS ---
+float calculateShadow(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords.xy = projCoords.xy * 0.5 + 0.5;
 
-    // 2. Roughness (Érdesség)
-    // ARM textúra: G csatorna = Roughness
-    float roughness = texture(roughnessSampler, fragTexCoord).g;
+    if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) {
+        return 0.0;
+    }
 
-    // --- TUNING ZÓNA: Itt csalunk, hogy jobban lásd! ---
+    float closestDepth = texture(shadowMap, projCoords.xy).r;
+    float currentDepth = projCoords.z;
 
-    // A. Kontraszt növelése:
-    // A roughness értékét négyzetre emeljük.
-    // Eredmény: Ami eddig 0.5 (fél-érdes) volt, az 0.25 lesz (sokkal simább/fényesebb).
-    // A nagyon érdes (1.0) marad 1.0. Ez kiemeli a fénylő részeket.
-    roughness = pow(roughness, 2.0);
+    // Kicsi bias a shadow acne ellen
+    float bias = 0.001;
 
-    // B. Fényforrás beállítása (legyen erősebb)
-    vec3 lightPos = vec3(5.0, 5.0, 5.0);
-    vec3 viewPos  = vec3(0.0, 2.0, -8.0);
-    vec3 lightColor = vec3(1.5, 1.5, 1.5); // 1.0 helyett 1.5 (erősebb lámpa)
+    float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
 
-    // --- Számítások ---
+    return shadow;
+}
 
-    // Ambient
-    vec3 ambient = 0.05 * lightColor; // Kicsit visszavettem, hogy a sötét sötétebb legyen
-
-    // Diffuse
-    vec3 norm = normalize(fragNormal);
+vec3 calcLight(vec3 lightPos, vec3 lightColor, vec3 normal, vec3 fragPos, vec3 viewDir, float roughness, bool useShadow, float shadowValue) {
     vec3 lightDir = normalize(lightPos - fragPos);
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * lightColor;
-
-    // Specular (Tükröződés)
-    vec3 viewDir = normalize(viewPos - fragPos);
     vec3 halfwayDir = normalize(lightDir + viewDir);
 
-    // C. Shininess (Fényesség) növelése:
-    // A 32.0 helyett 256.0-t használunk.
-    // Ez sokkal kisebb, tűélesebb fénypontot eredményez a sima részeken (mint a vizes szikla).
-    // Az (1.0 - roughness) miatt az érdes részeken ez drasztikusan lecsökken.
-    float shininess = (1.0 - roughness) * 256.0;
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 diffuse = diff * lightColor;
 
-    float spec = pow(max(dot(norm, halfwayDir), 0.0), max(shininess, 0.001));
+    float shininess = (1.0 - roughness) * 64.0;
+    float spec = pow(max(dot(normal, halfwayDir), 0.0), max(shininess, 0.001));
 
-    // D. Specular Intenzitás szorzó:
-    // Megszorozzuk 3.0-val a tükröződést, hogy "vakítson" a sima részeken.
-    vec3 specular = lightColor * spec * (1.0 - roughness) * 3.0;
+    // JAVÍTÁS: Roughness kiemelése!
+    // A szorzót 2.0-ról 4.0-ra emeltem, így a fényes részek sokkal jobban csillognak.
+    vec3 specular = lightColor * spec * (1.0 - roughness) * 4.0;
 
-    // Végeredmény
-    vec3 result = (ambient + diffuse + specular) * objectColor;
+    float shadowFactor = useShadow ? (1.0 - shadowValue) : 1.0;
+
+    return shadowFactor * (diffuse + specular);
+}
+
+void main() {
+    vec3 objectColor = texture(diffuseSampler, fragTexCoord).rgb;
+    float roughness = texture(roughnessSampler, fragTexCoord).g;
+
+    // Kontraszt növelése a roughness mapen
+    roughness = pow(roughness, 2.0);
+
+    vec3 norm = normalize(fragNormal);
+    vec3 viewPos = vec3(0.0, 2.0, -8.0);
+    vec3 viewDir = normalize(viewPos - fragPos);
+
+    // --- 1. FÉNY (Nap - Sárgás, Árnyékkal) ---
+    vec3 lightPos1 = vec3(5.0, 5.0, 5.0);
+    vec3 lightColor1 = vec3(1.5, 1.2, 0.8); // Meleg sárgás fény
+
+    vec3 lightDir1 = normalize(lightPos1 - fragPos);
+    float shadow = calculateShadow(fragPosLightSpace, norm, lightDir1);
+
+    vec3 lighting1 = calcLight(lightPos1, lightColor1, norm, fragPos, viewDir, roughness, true, shadow);
+
+    // --- 2. FÉNY (Kék - Erősebb, Nincs árnyék) ---
+    vec3 lightPos2 = vec3(-5.0, 3.0, -5.0);
+
+    // JAVÍTÁS: Kék fény felerősítése!
+    // A szorzót 0.2-ről 1.5-re emeltem, hogy látványos legyen az ellenfény.
+    vec3 lightColor2 = vec3(0.2, 0.4, 1.0) * 1.5;
+
+    vec3 lighting2 = calcLight(lightPos2, lightColor2, norm, fragPos, viewDir, roughness, false, 0.0);
+
+    vec3 ambient = 0.05 * objectColor;
+
+    vec3 result = ambient + (lighting1 + lighting2) * objectColor;
 
     outColor = vec4(result, 1.0);
 }

@@ -1,88 +1,46 @@
 /**
- * @file MeshObject.h
- * @brief Deklarálja a MeshObject osztályt, amely egy egyedi 3D modellt képvisel a Vulkan környezetben.
- *
- * Ez az osztály tartalmazza az objektum geometriáját (vertex puffer) és a világtérbeli
- * transzformációs állapotát (pozíció, forgatás).
+* @file MeshObject.h
+ * @brief Frissítve: Publikus vertexBuffer/vertexCount az árnyék passhoz, és javított draw szignatúra.
  */
 #pragma once
 
 #include "VulkanContext.h"
 #include <vector>
-#include <glm/glm.hpp> // GLM fő header a vektorokhoz és mátrixokhoz
-#include <glm/gtc/matrix_transform.hpp> // GLM segédfüggvények a transzformációkhoz (translate, rotate)
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
-/**
- * @class MeshObject
- * @brief Egy 3D háló (mesh) objektumot kezel, beleértve a Vulkan vertex puffert és a transzformációt.
- */
 class MeshObject {
 public:
-    /**
-     * @brief Konstruktor.
-     */
     MeshObject();
-
-    /**
-     * @brief Destruktor.
-     */
     ~MeshObject();
 
-    void setTexture(VkDescriptorSet ds) { this->textureDescriptorSet = ds; }
+    // Textúra beállítása (A descriptor set, ami a textúrákra mutat)
+    void setTexture(VkDescriptorSet descSet);
 
-    /**
-     * @brief Létrehozza a MeshObject Vulkan erőforrásait.
-     *
-     * Inicializálja és feltölti a Vulkan Vertex Puffert a megadott vertex adatokkal.
-     *
-     * @param context A Vulkan környezet (eszköz, memória, parancskészlet) mutatója.
-     * @param vertices A feltöltendő vertex adatok vektora.
-     */
+    // Létrehozás (Vertex Buffer feltöltése)
     void create(VulkanContext* context, const std::vector<float>& vertices);
 
-    /**
-     * @brief Felszabadítja az objektum által birtokolt Vulkan erőforrásokat (Vertex Puffer és Memória).
-     *
-     * @param device A Vulkan logikai eszköz.
-     */
+    // Takarítás
     void cleanup(VkDevice device);
 
-    /**
-     * @brief Rögzíti az objektum rajzolási parancsait a megadott parancspufferbe.
-     *
-     * Kiszámítja az MVP mátrixot (Model-View-Projection), feltölti Push Konstansként,
-     * majd elvégzi a vertex puffer kötését és a vkCmdDraw hívást.
-     *
-     * @param commandBuffer A rögzítés alatt álló parancspuffer.
-     * @param pipelineLayout A pipeline elrendezése (a Push Konstansok számára).
-     * @param animationTime A futásidő az animált forgatáshoz.
-     * @param viewProjection A már kiszámított nézeti-vetítési (View * Projection) mátrix.
-     * @param isWireframe Logikai érték, ami jelzi, hogy wireframe-ként rajzolódik-e (logikailag kezelt a rendererben).
-     */
-    void draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, float animationTime, const glm::mat4& viewProjection) const;
-    // --- Objektum Transzformációs Állapot ---
+    // Kirajzolás
+    // FONTOS: A paraméterek sorrendje megváltozott, hogy illeszkedjen a .cpp-hez!
+    void draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, glm::mat4 viewProjection, float animationTime);
 
-    /** @brief Az objektum világkoordinátás pozíciója (alapértelmezett: origó). */
+    // --- Publikus változók ---
+    // (Azért publikusak, hogy a VulkanRenderer könnyen elérje őket az árnyék renderelésnél)
+
+    // Transzformáció
     glm::vec3 position = glm::vec3(0.0f);
-
-    /** @brief A forgatás tengelye (alapértelmezett: Y tengely). */
     glm::vec3 rotationAxis = glm::vec3(0.0f, 1.0f, 0.0f);
-
-    /** @brief A forgatás sebessége fok/másodpercben (0.0f esetén statikus). */
     float rotationSpeed = 0.0f;
-private:
-    // --- Vulkan Geometria Erőforrások ---
-    VkDescriptorSet textureDescriptorSet = VK_NULL_HANDLE; // ÚJ
 
-    /** @brief A Vulkan Vertex Puffer leírója. */
+    // Vulkan Erőforrások
     VkBuffer vertexBuffer = VK_NULL_HANDLE;
-
-    /** @brief A Vertex Pufferhez allokált eszközmemória leírója. */
-    VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
-
-    /** @brief A rajzoláshoz használandó csúcsok száma. */
     uint32_t vertexCount = 0;
 
-    /** @brief Mutató a Vulkan környezetre, a belső Vulkan hívásokhoz. */
+private:
+    VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
+    VkDescriptorSet textureDescriptorSet = VK_NULL_HANDLE;
     VulkanContext* context = nullptr;
 };
