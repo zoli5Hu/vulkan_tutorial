@@ -1,6 +1,7 @@
 /**
  * @file main.cpp
- * @brief Fő alkalmazásfájl a Vulkan grafikus programhoz.
+ * @brief Teljes Vulkan PBR (Diffuse + ARM/Roughness) megvalósítás.
+ * Javítva: 8 float/vertex támogatás, procedurális Torus generálás.
  */
 
 #define GLFW_INCLUDE_VULKAN
@@ -28,31 +29,91 @@
 #include "VulkanCore/MeshObject.h"
 #include "VulkanCore/Texture.h"
 
-const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 600;
+const uint32_t WIDTH = 1024;
+const uint32_t HEIGHT = 768;
 using namespace std;
 
 /**
+ * @brief Torus generálása matematikailag (hogy a geometria és a normálok tökéletesek legyenek).
+ * @param mainRadius A fánk fő sugara.
+ * @param tubeRadius A cső vastagsága.
+ * @param mainSegments A fánk körének felbontása.
+ * @param tubeSegments A cső körének felbontása.
+ * @return 8 float/vertex vektor (Pos3, Norm3, UV2).
+ */
+std::vector<float> generateTorus(float mainRadius, float tubeRadius, int mainSegments, int tubeSegments) {
+    std::vector<float> vertices;
+    vertices.reserve(mainSegments * tubeSegments * 6 * 8);
+
+    for (int i = 0; i < mainSegments; ++i) {
+        for (int j = 0; j < tubeSegments; ++j) {
+            // Egy négyszög 2 háromszögből áll. A csúcsok indexei a rácson:
+            // 0: (i, j), 1: (i+1, j), 2: (i, j+1), 3: (i+1, j+1)
+            // Háromszög 1: 0 -> 1 -> 2
+            // Háromszög 2: 1 -> 3 -> 2
+
+            int indices[6][2] = {
+                {i, j}, {i + 1, j}, {i, j + 1},      // Tri 1
+                {i + 1, j}, {i + 1, j + 1}, {i, j + 1} // Tri 2
+            };
+
+            for (int k = 0; k < 6; ++k) {
+                int i_curr = indices[k][0];
+                int j_curr = indices[k][1];
+
+                // Szögek radiánban
+                float u = (float)i_curr / mainSegments * 2.0f * glm::pi<float>();
+                float v = (float)j_curr / tubeSegments * 2.0f * glm::pi<float>();
+
+                // 1. Pozíció (Position)
+                float cosU = cos(u), sinU = sin(u);
+                float cosV = cos(v), sinV = sin(v);
+
+                float x = (mainRadius + tubeRadius * cosV) * cosU;
+                float y = tubeRadius * sinV;
+                float z = (mainRadius + tubeRadius * cosV) * sinU;
+
+                vertices.push_back(x);
+                vertices.push_back(y);
+                vertices.push_back(z);
+
+                // 2. Normálvektor (Normal)
+                float nx = cosV * cosU;
+                float ny = sinV;
+                float nz = cosV * sinU;
+
+                vertices.push_back(nx);
+                vertices.push_back(ny);
+                vertices.push_back(nz);
+
+                // 3. Textúra koordináta (UV)
+                float texU = (float)i_curr / mainSegments * 4.0f; // 4x ismétlődés
+                float texV = (float)j_curr / tubeSegments * 1.0f;
+
+                vertices.push_back(texU);
+                vertices.push_back(texV);
+            }
+        }
+    }
+    return vertices;
+}
+
+/**
  * @namespace ModelData
- * @brief Modellek adatai (vertex tömbök).
+ * @brief A Kocka és a Piramis adatait olvassuk be az .inc fájlokból.
  */
 namespace ModelData {
-    // 1. Torus
-    static constexpr float torusVertices[] = {
-        #include "./Modells/Datas/torus.inc"
-    };
-
-    // 2. Kocka (Ico)
+    // 2. Kocka (Ico helyett most a javított kocka adatokat várjuk)
     static constexpr float icoVertices[] = {
         #include "./Modells/Datas/ico.inc"
     };
 
-    // 3. Piramis (Cone)
+    // 3. Piramis (Cone helyett piramis)
     static constexpr float pyramidVertices[] = {
         #include "./Modells/Datas/cone.inc"
     };
 
-    // 4. Piramis (n_v)
+    // 4. Még egy Piramis (n_v)
     static constexpr float n_v[] = {
         #include "./Modells/Datas/cone.inc"
     };
@@ -81,14 +142,14 @@ private:
     VulkanPipeline vulkanPipeline;
     VulkanRenderer vulkanRenderer;
 
-    // --- ÚJ: Descriptor Pool és Textúrák ---
+    // --- Descriptor Pool és Textúrák ---
     VkDescriptorPool descriptorPool;
     Texture rockTexture;
     Texture rustTexture;
 
     // --- Kamera Állapot ---
-    glm::vec3 cameraPosition = glm::vec3(0, 2, -10.0f);
-    const float cameraSpeed = 1.5f;
+    glm::vec3 cameraPosition = glm::vec3(0, 2, -8.0f);
+    const float cameraSpeed = 2.5f;
 
     // --- Input ---
     std::map<int, bool> keysPressed;
@@ -123,59 +184,58 @@ private:
     }
 
     void createObjects() {
-        // --- 1. Textúrák betöltése ---
-        // A képed alapján ezeket a fájlokat használjuk.
-        // FONTOS: Győződj meg róla, hogy az "Assets" mappa ott van az .exe mellett!
+        // --- 1. Textúrák betöltése (Diffuse + ARM) ---
+        // Az "ARM" textúra tartalmazza a Roughness-t a zöld (G) csatornán.
 
-        // Szikla textúra betöltése
         try {
-            rockTexture.create(&vulkanContext, "Assets/rock/aerial_rocks_02_diff_4k.jpg",
+            std::cout << "Texturak betoltese..." << std::endl;
+            rockTexture.create(&vulkanContext,
+                               "Assets/rock/aerial_rocks_02_diff_4k.jpg",  // Szín
+                               "Assets/rock/aerial_rocks_02_arm_4k.jpg",   // ARM (Ambient, Roughness, Metallic)
+                               descriptorPool, vulkanPipeline.getDescriptorSetLayout());
+
+            rustTexture.create(&vulkanContext,
+                               "Assets/rust/rusty_metal_grid_diff_4k.jpg",  // Szín
+                               "Assets/rust/rusty_metal_grid_arm_4k.jpg",   // ARM
                                descriptorPool, vulkanPipeline.getDescriptorSetLayout());
         } catch (const std::exception& e) {
-            std::cerr << "HIBA: Szikla textúra betöltése sikertelen! " << e.what() << std::endl;
+            std::cerr << "HIBA: Textura betoltes sikertelen! " << e.what() << std::endl;
         }
 
-        // Rozsda textúra betöltése
-        try {
-            rustTexture.create(&vulkanContext, "Assets/rust/rusty_metal_grid_diff_4k.jpg",
-                               descriptorPool, vulkanPipeline.getDescriptorSetLayout());
-        } catch (const std::exception& e) {
-            std::cerr << "HIBA: Rozsda textúra betöltése sikertelen! " << e.what() << std::endl;
-        }
+        // --- 2. Objektumok létrehozása ---
 
-        // --- 2. Objektumok létrehozása és textúra hozzárendelés ---
-
-        // Torus - Szikla textúra
-        std::vector<float> torusVector(std::begin(ModelData::torusVertices), std::end(ModelData::torusVertices));
+        // TORUS (Procedurálisan generálva)
+        // Sugár: 1.0, Vastagság: 0.4, Részletesség: 48x24
+        std::vector<float> torusVector = generateTorus(1.0f, 0.4f, 48, 24);
         torus.create(&vulkanContext, torusVector);
-        torus.position = glm::vec3(-3.0f, 0.0f, 0.0f);
-        torus.rotationAxis = glm::vec3(0.0f, 1.0f, 0.0f);
+        torus.position = glm::vec3(-2.5f, 0.0f, 0.0f);
+        torus.rotationAxis = glm::vec3(0.3f, 1.0f, 0.0f); // Kicsit döntve forogjon
         torus.rotationSpeed = 40.0f;
-        torus.setTexture(rockTexture.descriptorSet); // Textúra beállítása
+        torus.setTexture(rockTexture.descriptorSet);
 
-        // Kocka (Ico) - Rozsda textúra
+        // KOCKA (ico.inc fájlból)
         std::vector<float> cubeVector(std::begin(ModelData::icoVertices), std::end(ModelData::icoVertices));
         cube.create(&vulkanContext, cubeVector);
-        cube.position = glm::vec3(3.0f, 0.0f, 0.0f);
-        cube.rotationSpeed = 15.0f; // Most már forogjon ez is kicsit
-        cube.rotationAxis = glm::vec3(1.0f, 1.0f, 0.0f);
-        cube.setTexture(rustTexture.descriptorSet); // Textúra beállítása
+        cube.position = glm::vec3(2.5f, 0.0f, 0.0f);
+        cube.rotationSpeed = 25.0f;
+        cube.rotationAxis = glm::vec3(1.0f, 0.5f, 0.0f);
+        cube.setTexture(rustTexture.descriptorSet);
 
-        // Piramis - Szikla textúra
+        // PIRAMIS (cone.inc fájlból)
         std::vector<float> pyramidVector(std::begin(ModelData::pyramidVertices), std::end(ModelData::pyramidVertices));
         pyramid.create(&vulkanContext, pyramidVector);
-        pyramid.position = glm::vec3(0.0f, 3.0f, 0.0f);
-        pyramid.rotationAxis = glm::vec3(1.0f, 0.0f, 0.0f);
+        pyramid.position = glm::vec3(0.0f, 2.5f, 0.0f);
+        pyramid.rotationAxis = glm::vec3(0.0f, 1.0f, 0.0f);
         pyramid.rotationSpeed = 60.0f;
-        pyramid.setTexture(rockTexture.descriptorSet); // Textúra beállítása
+        pyramid.setTexture(rockTexture.descriptorSet);
 
-        // Piramis (n) - Rozsda textúra
+        // ALSÓ PIRAMIS (n)
         std::vector<float> n_ve(std::begin(ModelData::n_v), std::end(ModelData::n_v));
         n.create(&vulkanContext, n_ve);
-        n.position = glm::vec3(0.0f, -3.0f, 0.0f);
-        n.rotationAxis = glm::vec3(0.0f, 1.0f, 0.0f);
-        n.rotationSpeed = 90.0f;
-        n.setTexture(rustTexture.descriptorSet); // Textúra beállítása
+        n.position = glm::vec3(0.0f, -2.5f, 0.0f);
+        n.rotationAxis = glm::vec3(0.0f, 1.0f, 0.0f); // Fejre állítjuk forgatással majd a draw-ban vagy itt
+        n.rotationSpeed = -60.0f;
+        n.setTexture(rustTexture.descriptorSet);
     }
 
     void createDepthResources() {
@@ -238,17 +298,16 @@ private:
 
         createDepthResources();
 
-        // 1. Pipeline Létrehozása (Layout miatt kell előbb!)
+        // Pipeline létrehozása (már az új elrendezéssel: Pos, Norm, UV)
         vulkanPipeline.create(&vulkanContext, &vulkanSwapchain, depthImageView, depthFormat);
 
-        // 2. Descriptor Pool Létrehozása (Textúrákhoz)
+        // Descriptor Pool
         vulkanContext.createDescriptorPool(descriptorPool);
 
-        // 3. Objektumok Létrehozása (Textúrák betöltése)
-        // Most már biztonságos, mert van Pipeline Layout és Descriptor Pool
+        // Objektumok inicializálása
         createObjects();
 
-        // 4. Renderer Létrehozása
+        // Renderer
         vulkanRenderer.create(&vulkanContext, &vulkanSwapchain);
     }
 
@@ -257,7 +316,7 @@ private:
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan Textured Objects", nullptr, nullptr);
+        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan PBR - Torus & Shapes", nullptr, nullptr);
     }
 
     void mainLoop()
@@ -271,8 +330,8 @@ private:
 
             glfwPollEvents();
 
+            // Kamera mozgatás
             float velocity = cameraSpeed * deltaTime;
-
             if (keysPressed[GLFW_KEY_W]) cameraPosition.z += velocity;
             if (keysPressed[GLFW_KEY_S]) cameraPosition.z -= velocity;
             if (keysPressed[GLFW_KEY_A]) cameraPosition.x -= velocity;
@@ -280,9 +339,8 @@ private:
             if (keysPressed[GLFW_KEY_R]) cameraPosition.y += velocity;
             if (keysPressed[GLFW_KEY_F]) cameraPosition.y -= velocity;
 
-            // Most már minden objektum textúrázott, nincs wireframe pipeline váltogatás
+            // Renderelés
             std::vector<MeshObject*> objects = {&torus, &cube, &pyramid, &n};
-
             vulkanRenderer.drawFrame(&vulkanSwapchain, &vulkanPipeline, cameraPosition, objects);
         }
 
@@ -295,11 +353,9 @@ private:
         vulkanPipeline.cleanup();
         vulkanSwapchain.cleanup();
 
-        // Textúrák felszabadítása
         rockTexture.cleanup();
         rustTexture.cleanup();
 
-        // Descriptor Pool felszabadítása
         vkDestroyDescriptorPool(vulkanContext.getDevice(), descriptorPool, nullptr);
 
         torus.cleanup(vulkanContext.getDevice());

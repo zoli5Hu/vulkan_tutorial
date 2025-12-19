@@ -14,39 +14,30 @@ MeshObject::~MeshObject() = default;
 void MeshObject::create(VulkanContext* ctx, const std::vector<float>& vertices) {
     this->context = ctx;
 
-    // FONTOS: 5 float van egy vertexben (X,Y,Z,U,V), ezért 5-tel osztunk
-    this->vertexCount = static_cast<uint32_t>(vertices.size() / 5);
+    // --- JAVÍTÁS: 8 float van egy vertexben (Pos3 + Norm3 + UV2) ---
+    // Ha 5-tel osztasz, "szemetet" olvas a GPU a végén -> széteső modell.
+    this->vertexCount = static_cast<uint32_t>(vertices.size() / 8);
 
     VkDeviceSize bufferSize = vertices.size() * sizeof(float);
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
 
-    // 1. Staging Buffer
-    context->createBuffer(
-        bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        stagingBuffer, stagingBufferMemory
-    );
+    // Staging Buffer létrehozása
+    context->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-    // 2. Másolás
+    // Adatok másolása
     void* data;
     vkMapMemory(context->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, vertices.data(), (size_t)bufferSize);
     vkUnmapMemory(context->getDevice(), stagingBufferMemory);
 
-    // 3. Vertex Buffer
-    context->createBuffer(
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        vertexBuffer, vertexBufferMemory
-    );
+    // Vertex Buffer létrehozása
+    context->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
 
-    // 4. Staging -> Vertex másolás
+    // Másolás Staging -> Vertex
     context->copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
-    // 5. Cleanup Staging
     vkDestroyBuffer(context->getDevice(), stagingBuffer, nullptr);
     vkFreeMemory(context->getDevice(), stagingBufferMemory, nullptr);
 }

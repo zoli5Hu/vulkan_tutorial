@@ -1,15 +1,25 @@
 #version 450
 
-layout(location = 0) in vec3 in_position;
-layout(location = 1) in vec2 in_texCoord; // ÚJ: UV koordináta bemenet
+// 0: Pozíció (vec3)
+layout(location = 0) in vec3 inPosition;
+// 1: Normálvektor (vec3) - EZ HIÁNYZOTT!
+layout(location = 1) in vec3 inNormal;
+// 2: UV (vec2) - Ez eltolódott a 2-es helyre
+layout(location = 2) in vec2 inTexCoord;
 
-layout(location = 0) out vec2 frag_texCoord; // Kimenet a frag shadernek
+layout(location = 0) out vec3 fragPos;
+layout(location = 1) out vec3 fragNormal;
+layout(location = 2) out vec2 fragTexCoord;
 
 layout(push_constant) uniform PushConstants {
-    layout(offset = 0) mat4 mvp;
-} constants;
+    mat4 model;
+} push;
 
 void main() {
-    gl_Position = constants.mvp * vec4(in_position, 1.0f);
-    frag_texCoord = in_texCoord; // Átadjuk a fragment shadernek
+    gl_Position = push.model * vec4(inPosition, 1.0);
+    fragPos = vec3(push.model * vec4(inPosition, 1.0));
+
+    // Normálvektor továbbítása a fragment shadernek
+    fragNormal = mat3(push.model) * inNormal;
+    fragTexCoord = inTexCoord;
 }

@@ -1,6 +1,6 @@
 /**
  * @file VulkanPipeline.cpp
- * @brief Megvalósítja a VulkanPipeline osztályt.
+ * @brief Megvalósítja a VulkanPipeline osztályt (Bővítve: Normálvektorok + Roughness Map).
  */
 #include "VulkanPipeline.h"
 
@@ -27,8 +27,7 @@ void VulkanPipeline::create(VulkanContext* ctx, VulkanSwapchain* swapchain, VkIm
     createRenderPass(swapchain->getImageFormat(), depthFormat);
     createGraphicsPipeline(); // Ez hozza létre a Layout-ot is
 
-    // Mivel a wireframe pipeline ugyanazt a layoutot használja, ezt a hívást meghagyjuk,
-    // de a vertex formátumát frissítettük benne.
+    // A wireframe pipeline-t is frissítjük az új vertex formátumra
     createWireframePipeline();
 
     createFramebuffers(swapchain, depthImageView);
@@ -43,7 +42,6 @@ void VulkanPipeline::cleanup() {
     vkDestroyPipelineLayout(context->getDevice(), pipelineLayout, nullptr);
     vkDestroyRenderPass(context->getDevice(), renderPass, nullptr);
 
-    // FONTOS: A Descriptor Set Layout felszabadítása
     vkDestroyDescriptorSetLayout(context->getDevice(), descriptorSetLayout, nullptr);
 }
 
@@ -128,8 +126,9 @@ void VulkanPipeline::createGraphicsPipeline()
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-    // --- 1. Vertex Input Frissítése (X,Y,Z,U,V) ---
-    const size_t g_vertexSize = sizeof(float) * 5;
+    // --- 1. Vertex Input Frissítése (Pos, Normal, UV) ---
+    // 3 float (pos) + 3 float (normal) + 2 float (uv) = 8 float
+    const size_t g_vertexSize = sizeof(float) * 8;
 
     VkVertexInputBindingDescription bindingInfo = {
         .binding   = 0,
@@ -137,19 +136,26 @@ void VulkanPipeline::createGraphicsPipeline()
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
 
-    std::array<VkVertexInputAttributeDescription, 2> attributeInfos;
+    // Most már 3 attribútumunk van
+    std::array<VkVertexInputAttributeDescription, 3> attributeInfos;
 
-    // 0. Pozíció (vec3)
+    // 0. Pozíció (vec3) - Offset: 0
     attributeInfos[0].location = 0;
     attributeInfos[0].binding  = 0;
     attributeInfos[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
     attributeInfos[0].offset   = 0;
 
-    // 1. UV Koordináták (vec2)
+    // 1. Normálvektor (vec3) - Offset: 12 (3 * 4 byte)
     attributeInfos[1].location = 1;
     attributeInfos[1].binding  = 0;
-    attributeInfos[1].format   = VK_FORMAT_R32G32_SFLOAT;
+    attributeInfos[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
     attributeInfos[1].offset   = 3 * sizeof(float);
+
+    // 2. UV Koordináták (vec2) - Offset: 24 (6 * 4 byte)
+    attributeInfos[2].location = 2;
+    attributeInfos[2].binding  = 0;
+    attributeInfos[2].format   = VK_FORMAT_R32G32_SFLOAT;
+    attributeInfos[2].offset   = 6 * sizeof(float);
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -175,13 +181,8 @@ void VulkanPipeline::createGraphicsPipeline()
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-
-    // CULLING BEÁLLÍTÁSOK
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Hátlapok eldobása
-    // JAVÍTÁS: Mivel a projection Y tengelye fordított (-1), a háromszögek iránya is megfordult.
-    // Ezért a CLOCKWISE (óramutatóval egyező) lesz az előlap.
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -215,18 +216,27 @@ void VulkanPipeline::createGraphicsPipeline()
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
 
-    // --- Descriptor Set Layout (Textúra) ---
-    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-    samplerLayoutBinding.binding = 0;
-    samplerLayoutBinding.descriptorCount = 1;
-    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    samplerLayoutBinding.pImmutableSamplers = nullptr;
-    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    // --- Descriptor Set Layout MÓDOSÍTÁS (2 Textúra) ---
+    // Binding 0: Diffuse Map
+    // Binding 1: Roughness Map
+    std::vector<VkDescriptorSetLayoutBinding> bindings(2);
+
+    bindings[0].binding = 0;
+    bindings[0].descriptorCount = 1;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[0].pImmutableSamplers = nullptr;
+    bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    bindings[1].binding = 1;
+    bindings[1].descriptorCount = 1;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[1].pImmutableSamplers = nullptr;
+    bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &samplerLayoutBinding;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
 
     if (vkCreateDescriptorSetLayout(context->getDevice(), &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor set layout!");
@@ -295,12 +305,14 @@ void VulkanPipeline::createWireframePipeline()
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-    const size_t g_vertexSize = sizeof(float) * 5;
+    // --- UGYANAZ A VERTEX FORMAT KELL, MINT A GRAPHICS PIPELINE-NÁL ---
+    const size_t g_vertexSize = sizeof(float) * 8;
     VkVertexInputBindingDescription bindingInfo = { 0, (uint32_t)g_vertexSize, VK_VERTEX_INPUT_RATE_VERTEX };
 
-    std::array<VkVertexInputAttributeDescription, 2> attributeInfos;
+    std::array<VkVertexInputAttributeDescription, 3> attributeInfos;
     attributeInfos[0].location = 0; attributeInfos[0].binding = 0; attributeInfos[0].format = VK_FORMAT_R32G32B32_SFLOAT; attributeInfos[0].offset = 0;
-    attributeInfos[1].location = 1; attributeInfos[1].binding = 0; attributeInfos[1].format = VK_FORMAT_R32G32_SFLOAT; attributeInfos[1].offset = 3 * sizeof(float);
+    attributeInfos[1].location = 1; attributeInfos[1].binding = 0; attributeInfos[1].format = VK_FORMAT_R32G32B32_SFLOAT; attributeInfos[1].offset = 3 * sizeof(float);
+    attributeInfos[2].location = 2; attributeInfos[2].binding = 0; attributeInfos[2].format = VK_FORMAT_R32G32_SFLOAT; attributeInfos[2].offset = 6 * sizeof(float);
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -319,7 +331,6 @@ void VulkanPipeline::createWireframePipeline()
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
-    // KÜLÖNBSÉG: POLYGON_MODE_LINE + JAVÍTOTT CULLING
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
@@ -327,7 +338,6 @@ void VulkanPipeline::createWireframePipeline()
     rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    // JAVÍTÁS ITT IS:
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
