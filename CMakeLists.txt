@@ -92,6 +92,7 @@ add_executable(foobar
         VulkanCore/MeshObject.h
         VulkanCore/Texture.h
         VulkanCore/Texture.cpp
+        VulkanCore/vertex_tools.h
 )
 
 # Ez biztosítja, hogy a shaderek leforduljanak az exe előtt

@@ -1,17 +1,17 @@
 /**
  * @file VulkanContext.cpp
- * @brief Megvalósítja a VulkanContext osztályt.
+ * @brief Megvalósítja a VulkanContext osztályt, amely a Vulkan API alacsony szintű kezeléséért felelős.
  */
 #include "VulkanContext.h"
 
-// FONTOS: Az stb_image implementációja.
-// A path-ot a te mappaszerkezetedhez igazítottam (a logok alapján a ../Lib mappában van)
+// FONTOS: Az stb_image implementációja a képfájlok (JPG, PNG) betöltéséhez.
 #define STB_IMAGE_IMPLEMENTATION
 #include "../Lib/stb_image.h"
 
 using namespace std;
 
 // --- Callback a validációs rétegekhez ---
+// Ez a függvény fut le, ha a Vulkan hibaüzenetet vagy figyelmeztetést küld a fejlesztőnek.
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -22,6 +22,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 }
 
 // --- Dinamikus függvénybetöltők ---
+// Mivel a Debug Utils egy kiterjesztés, a függvényeit manuálisan kell lekérni az Instance-tól.
 VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance,
     const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -45,27 +46,24 @@ void DestroyDebugUtilsMessengerEXT(
     }
 }
 
-// --- Konstruktor / Destruktor ---
-VulkanContext::VulkanContext() {
-}
-
-VulkanContext::~VulkanContext() {
-}
+VulkanContext::VulkanContext() {}
+VulkanContext::~VulkanContext() {}
 
 // --- Inicializálás és Takarítás ---
 
 void VulkanContext::initInstance(GLFWwindow* window) {
-    createInstance();
-    setupDebugMessenger();
+    createInstance();        // Kapcsolat létrehozása a Vulkan könyvtárral
+    setupDebugMessenger();   // Hibakereső réteg beállítása
 }
 
 void VulkanContext::initDevice(VkSurfaceKHR surface) {
-    pickPhysicalDevice(surface);
-    createLogicalDevice(surface);
-    createCommandPool();
+    pickPhysicalDevice(surface);    // Alkalmas videókártya kiválasztása
+    createLogicalDevice(surface);  // Szoftveres interfész létrehozása a kártyához
+    createCommandPool();           // Parancspuffer tároló létrehozása
 }
 
 void VulkanContext::cleanup() {
+    // Erőforrások felszabadítása fordított sorrendben
     vkDestroyCommandPool(device, commandPool, nullptr);
     vkDestroyDevice(device, nullptr);
 
@@ -77,9 +75,12 @@ void VulkanContext::cleanup() {
 }
 
 void VulkanContext::createInstance() {
+    // Validációs rétegek ellenőrzése (fejlesztés alatt segít a hibák kiszűrésében)
     if (enableValidationLayers && !checkValidationLayerSupport()) {
         throw runtime_error("validation layers requested, but not available!");
     }
+
+    // Alkalmazás metaadatok megadása a Vulkan számára
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Hello Triangle";
@@ -92,10 +93,12 @@ void VulkanContext::createInstance() {
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
 
+    // Szükséges kiterjesztések (pl. ablakkezeléshez GLFW-vel)
     auto extensions = getRequiredExtensions();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
 
+    // Debug messenger bekötése az Instance létrehozásához
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     if (enableValidationLayers) {
         createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -124,6 +127,7 @@ void VulkanContext::setupDebugMessenger() {
 }
 
 void VulkanContext::pickPhysicalDevice(VkSurfaceKHR surface) {
+    // Az összes elérhető videókártya listázása
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
@@ -132,6 +136,8 @@ void VulkanContext::pickPhysicalDevice(VkSurfaceKHR surface) {
     }
     vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+    // Olyan kártya keresése, ami megfelel az igényeinknek (Swapchain, Graphics Queue, stb.)
     for (const auto& dev : devices) {
         if (isDeviceSuitable(dev, surface)) {
             physicalDevice = dev;
@@ -148,6 +154,7 @@ void VulkanContext::pickPhysicalDevice(VkSurfaceKHR surface) {
 void VulkanContext::createLogicalDevice(VkSurfaceKHR surface) {
     QueueFamilyIndices indices = queueIndices;
 
+    // Queue-k (várakozási sorok) definiálása a grafikai és megjelenítési feladatokhoz
     vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
 
@@ -161,19 +168,18 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface) {
         queueCreateInfos.push_back(queueCreateInfo);
     }
 
-    // --- Feature-ök (képességek) lekérdezése és engedélyezése ---
+    // --- Hardveres képességek (Features) lekérdezése ---
     VkPhysicalDeviceFeatures supportedFeatures;
     vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
 
     VkPhysicalDeviceFeatures featuresToEnable = {};
 
-    // 1. Wireframe mód (vonalas megjelenítés)
+    // 1. Wireframe mód engedélyezése (ha a hardver támogatja)
     if (supportedFeatures.fillModeNonSolid) {
         featuresToEnable.fillModeNonSolid = VK_TRUE;
     }
 
-    // 2. JAVÍTÁS: Anizotróp szűrés (Sampler Anisotropy) engedélyezése
-    // Ez hiányzott, ezért dobott hibát a programod!
+    // 2. Anizotróp szűrés engedélyezése a textúrák minőségének javításához
     if (supportedFeatures.samplerAnisotropy) {
         featuresToEnable.samplerAnisotropy = VK_TRUE;
     }
@@ -184,9 +190,7 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface) {
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
-
     createInfo.pEnabledFeatures = &enabledDeviceFeatures;
-
     createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
@@ -197,15 +201,18 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface) {
         createInfo.enabledLayerCount = 0;
     }
 
+    // Logikai eszköz tényleges létrehozása
     if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
         throw runtime_error("failed to create logical device!");
     }
 
+    // Handle-ök lekérése a létrehozott sorokhoz
     vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
     vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 }
 
 void VulkanContext::createCommandPool() {
+    // A command pool kezeli a GPU-nak küldött parancspufferek memóriáját
     QueueFamilyIndices indices = queueIndices;
 
     VkCommandPoolCreateInfo poolInfo{};
@@ -221,6 +228,7 @@ void VulkanContext::createCommandPool() {
 // --- Eszköz kiválasztás segédfüggvényei ---
 
 bool VulkanContext::isDeviceSuitable(VkPhysicalDevice dev, VkSurfaceKHR surface) {
+    // Megfelelő-e a kártya? (Van grafikai sora, támogatja az extension-öket, van swapchain)
     QueueFamilyIndices indices = findQueueFamilies(dev, surface);
     bool extensionsSupported = checkDeviceExtensionSupport(dev);
 
@@ -233,13 +241,14 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice dev, VkSurfaceKHR surface)
     VkPhysicalDeviceFeatures supportedFeatures;
     vkGetPhysicalDeviceFeatures(dev, &supportedFeatures);
 
-    // Ellenőrizzük, hogy a szükséges feature-ök támogatottak-e
+    // Kifejezetten ellenőrizzük a wireframe és anizotróp szűrés támogatását
     bool featuresAdequate = supportedFeatures.fillModeNonSolid && supportedFeatures.samplerAnisotropy;
 
     return indices.isComplete() && extensionsSupported && swapChainAdequate && featuresAdequate;
 }
 
 QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice dev, VkSurfaceKHR surface) {
+    // Megkeresi, melyik sor (queue family) képes grafikai és megjelenítési parancsokat fogadni
     QueueFamilyIndices indices;
 
     uint32_t queueFamilyCount = 0;
@@ -259,31 +268,28 @@ QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice dev, VkSurf
             indices.presentFamily = i;
         }
 
-        if (indices.isComplete()) {
-            break;
-        }
+        if (indices.isComplete()) break;
         i++;
     }
     return indices;
 }
 
 bool VulkanContext::checkDeviceExtensionSupport(VkPhysicalDevice dev) {
+    // Ellenőrzi, hogy a kártya támogatja-e a szükséges bővítményeket (pl. VK_KHR_swapchain)
     uint32_t extensionCount;
     vkEnumerateDeviceExtensionProperties(dev, nullptr, &extensionCount, nullptr);
-
     vector<VkExtensionProperties> availableExtensions(extensionCount);
     vkEnumerateDeviceExtensionProperties(dev, nullptr, &extensionCount, availableExtensions.data());
 
     set<string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
-
     for (const auto& extension : availableExtensions) {
         requiredExtensions.erase(extension.extensionName);
     }
-
     return requiredExtensions.empty();
 }
 
 SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice dev, VkSurfaceKHR surf) {
+    // Lekéri a Swapchain képességeit (formátumok, megjelenítési módok)
     SwapChainSupportDetails details;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, surf, &details.capabilities);
 
@@ -300,7 +306,6 @@ SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice de
         details.presentModes.resize(presentModeCount);
         vkGetPhysicalDeviceSurfacePresentModesKHR(dev, surf, &presentModeCount, details.presentModes.data());
     }
-
     return details;
 }
 
@@ -309,7 +314,6 @@ SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice de
 bool VulkanContext::checkValidationLayerSupport() {
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
     vector<VkLayerProperties> availableLayers(layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
@@ -321,9 +325,7 @@ bool VulkanContext::checkValidationLayerSupport() {
                 break;
             }
         }
-        if (!layerFound) {
-            return false;
-        }
+        if (!layerFound) return false;
     }
     return true;
 }
@@ -332,7 +334,6 @@ std::vector<const char*> VulkanContext::getRequiredExtensions() {
     uint32_t glfwExtensionCount = 0;
     const char** glfwExtensions;
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
     vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
     if (enableValidationLayers) {
@@ -342,6 +343,7 @@ std::vector<const char*> VulkanContext::getRequiredExtensions() {
 }
 
 void VulkanContext::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+    // Meghatározza, milyen típusú és súlyosságú üzeneteket szeretnénk kapni a validációs rétegtől
     createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
@@ -354,6 +356,7 @@ void VulkanContext::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreate
 // --- Erőforrás-kezelés ---
 
 uint32_t VulkanContext::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    // Megkeresi a GPU memóriájában azt a területet, ami megfelel az igényelt tulajdonságoknak (pl. Host Visible)
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 
@@ -366,6 +369,7 @@ uint32_t VulkanContext::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlag
 }
 
 void VulkanContext::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+    // Létrehoz egy puffert (Vertex, Index, Staging) és lefoglalja hozzá a GPU memóriát
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
@@ -392,6 +396,7 @@ void VulkanContext::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, Vk
 }
 
 void VulkanContext::executeSingleTimeCommands(std::function<void(VkCommandBuffer)> commandFunction) {
+    // Segédfüggvény egyetlen egyszer futó parancsokhoz (pl. másolás, layout váltás)
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -406,9 +411,7 @@ void VulkanContext::executeSingleTimeCommands(std::function<void(VkCommandBuffer
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
     commandFunction(commandBuffer);
-
     vkEndCommandBuffer(commandBuffer);
 
     VkSubmitInfo submitInfo{};
@@ -417,7 +420,7 @@ void VulkanContext::executeSingleTimeCommands(std::function<void(VkCommandBuffer
     submitInfo.pCommandBuffers = &commandBuffer;
 
     vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(graphicsQueue);
+    vkQueueWaitIdle(graphicsQueue); // Megvárjuk, amíg a GPU végez
 
     vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
@@ -431,12 +434,11 @@ void VulkanContext::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceS
 }
 
 void VulkanContext::createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+    // 2D kép objektum létrehozása (textúráknak vagy árnyéktérképeknek)
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = width;
-    imageInfo.extent.height = height;
-    imageInfo.extent.depth = 1;
+    imageInfo.extent = {width, height, 1};
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;
     imageInfo.format = format;
@@ -461,11 +463,11 @@ void VulkanContext::createImage(uint32_t width, uint32_t height, VkFormat format
     if (vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate image memory!");
     }
-
     vkBindImageMemory(device, image, imageMemory, 0);
 }
 
 VkImageView VulkanContext::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags) {
+    // Képnézet létrehozása, ami meghatározza, hogyan férünk hozzá a kép adataihoz
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = image;
@@ -481,7 +483,6 @@ VkImageView VulkanContext::createImageView(VkImage image, VkFormat format, VkIma
     if (vkCreateImageView(device, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture image view!");
     }
-
     return imageView;
 }
 
@@ -489,7 +490,7 @@ VkImageView VulkanContext::createImageView(VkImage image, VkFormat format, VkIma
 
 void VulkanContext::createTextureImage(const std::string& filename, VkImage& textureImage, VkDeviceMemory& textureImageMemory) {
     int texWidth, texHeight, texChannels;
-    // RGBA betöltése
+    // Pixelek betöltése a fájlból (RGBA)
     stbi_uc* pixels = stbi_load(filename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
@@ -497,6 +498,7 @@ void VulkanContext::createTextureImage(const std::string& filename, VkImage& tex
         throw std::runtime_error("failed to load texture image: " + filename);
     }
 
+    // Staging buffer létrehozása az adatok CPU-ról GPU-ra másolásához
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
@@ -505,11 +507,12 @@ void VulkanContext::createTextureImage(const std::string& filename, VkImage& tex
     vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
     memcpy(data, pixels, static_cast<size_t>(imageSize));
     vkUnmapMemory(device, stagingBufferMemory);
-
     stbi_image_free(pixels);
 
+    // Végleges kép létrehozása a GPU memóriájában
     createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
 
+    // Layout váltások a másoláshoz és a shader általi olvasáshoz
     transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
     transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -523,6 +526,7 @@ void VulkanContext::createTextureImageView(VkImage image, VkImageView& imageView
 }
 
 void VulkanContext::createTextureSampler(VkSampler& sampler) {
+    // Mintavételező beállítása (hogyan simítsa a textúrát, ha közelről/távolról nézzük)
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -531,7 +535,7 @@ void VulkanContext::createTextureSampler(VkSampler& sampler) {
     samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
-    // Anizotróp szűrés beállítása (a Logical Device létrehozásakor már engedélyeztük)
+    // Anizotróp szűrés beállítása a korábban engedélyezett feature alapján
     samplerInfo.anisotropyEnable = VK_TRUE;
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(physicalDevice, &properties);
@@ -548,6 +552,7 @@ void VulkanContext::createTextureSampler(VkSampler& sampler) {
 }
 
 void VulkanContext::createDescriptorPool(VkDescriptorPool& descriptorPool) {
+    // Tároló a Descriptor Set-ek számára (textúra bindingokhoz)
     VkDescriptorPoolSize poolSize{};
     poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSize.descriptorCount = 100;
@@ -564,6 +569,8 @@ void VulkanContext::createDescriptorPool(VkDescriptorPool& descriptorPool) {
 }
 
 void VulkanContext::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
+    // Kép belső állapotának váltása (pl. üres -> másolási cél -> shader olvasási forrás)
+    // Pipeline Barrier-t használ a GPU szinkronizációhoz.
     executeSingleTimeCommands([&](VkCommandBuffer commandBuffer) {
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -600,6 +607,7 @@ void VulkanContext::transitionImageLayout(VkImage image, VkFormat format, VkImag
 }
 
 void VulkanContext::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
+    // Adatok átmásolása egy pufferből egy képbe
     executeSingleTimeCommands([&](VkCommandBuffer commandBuffer) {
         VkBufferImageCopy region{};
         region.bufferOffset = 0;
